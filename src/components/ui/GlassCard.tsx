@@ -2,26 +2,39 @@ import * as React from "react"
 
 export interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   important?: boolean;
+  /** Use glass variant only for nav/modal/drawer, default uses elevation-card */
+  glass?: boolean;
+  /** Adds press-feedback scale on active for clickable cards */
+  interactive?: boolean;
 }
 
-export function GlassCard({ className, children, important = false, ...props }: GlassCardProps) {
+export function GlassCard({
+  className,
+  children,
+  important = false,
+  glass = false,
+  interactive = false,
+  ...props
+}: GlassCardProps) {
+  const baseClass = glass ? "elevation-glass" : "elevation-card";
+  const pressClass = interactive ? "press-feedback cursor-pointer" : "";
+
   return (
-    <div 
-      className={`relative bg-surface-glass backdrop-blur-[24px] rounded-[22px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] ${className || ""}`} 
+    <div
+      className={`relative rounded-[20px] p-6 ${baseClass} ${pressClass} ${className || ""}`}
       {...props}
     >
-      {/* 1px low opacity border + inner top highlight */}
-      <div className="absolute inset-0 rounded-[22px] border border-border-subtle pointer-events-none" />
-      <div className="absolute inset-0 rounded-[22px] border-t border-white/10 dark:border-white/10 border-black/5 pointer-events-none" />
-      
-      {/* Important card specific edges */}
+      {/* Top-edge elevation highlight — conveys light from above */}
+      <div className="absolute inset-x-0 top-0 h-px rounded-t-[20px] bg-[var(--border-top-highlight)] pointer-events-none" />
+
+      {/* Important card accent edges */}
       {important && (
         <>
-          <div className="absolute top-0 left-0 w-16 h-[2px] bg-brand-neon-blue rounded-tl-[22px] blur-[1px]" />
-          <div className="absolute bottom-0 right-0 w-16 h-[2px] bg-brand-neon-red rounded-br-[22px] blur-[1px]" />
+          <div className="absolute top-0 left-0 w-20 h-[2px] bg-gradient-to-r from-brand-neon-blue to-transparent rounded-tl-[20px] opacity-80 pointer-events-none" />
+          <div className="absolute bottom-0 right-0 w-20 h-[2px] bg-gradient-to-l from-brand-neon-red to-transparent rounded-br-[20px] opacity-80 pointer-events-none" />
         </>
       )}
-      
+
       <div className="relative z-10 h-full">
         {children}
       </div>

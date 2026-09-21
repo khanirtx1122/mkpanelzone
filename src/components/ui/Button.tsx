@@ -10,36 +10,88 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "default", asChild = false, children, ...props }, ref) => {
     
-    const baseClasses = "relative inline-flex items-center justify-center font-bold tracking-wide transition-all duration-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed group overflow-hidden active:scale-[0.98]";
-    
-    const variantClasses = {
-      primary: "bg-surface-glass text-brand-ink rounded-[13px] shadow-[0_0_15px_rgba(77,163,255,0.15)] hover:shadow-[0_0_25px_rgba(77,163,255,0.25)] hover:-translate-y-[2px]",
-      secondary: "bg-surface text-brand-ink rounded-[13px] border border-border-subtle hover:bg-surface-glass",
-      outline: "bg-transparent border border-border-subtle text-brand-ink rounded-[13px] hover:bg-foreground/5",
-      ghost: "bg-transparent border-transparent text-brand-ink rounded-[13px] hover:bg-foreground/5",
-      glass: "bg-surface-glass backdrop-blur-xl border border-border-subtle text-foreground hover:bg-foreground/10 hover:border-border-subtle rounded-[13px]",
-      product: "bg-surface-glass border border-transparent text-foreground rounded-[13px]",
+    /**
+     * Base — transform + opacity only (no box-shadow, no filter, no color in base transition)
+     * active:scale = press feedback per spec 6.3
+     * disabled: explicit text muted (not just opacity-50 which loses text visibility)
+     */
+    const baseClasses = [
+      "relative inline-flex items-center justify-center",
+      "font-bold tracking-wide",
+      "transition-[transform,opacity] duration-[var(--duration-fast)] [transition-timing-function:var(--ease-obsidian)]",
+      "focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-neon-blue focus-visible:ring-offset-2",
+      "disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none",
+      "active:scale-[0.975]",
+      "group overflow-hidden",
+    ].join(" ");
+
+    const variantClasses: Record<string, string> = {
+      /**
+       * primary — solid neon-glass fill that is actually visible.
+       * Background: a real branded tint so it reads as "primary CTA".
+       * Border gradient overlay is decorative, not structural contrast.
+       */
+      primary: [
+        "bg-brand-blue-500 text-white",
+        "shadow-[0_0_0_1px_rgba(77,163,255,0.4)]",
+        "hover:bg-brand-blue-500/90",
+        "rounded-[13px]",
+        // Light theme: stronger branded fill
+        "[data-theme='light']_&:bg-brand-blue-700",
+      ].join(" "),
+
+      secondary: [
+        "bg-surface text-foreground",
+        "rounded-[13px]",
+        "border border-border-subtle hover:border-border-subtle-hover",
+        "hover:bg-surface-raised",
+      ].join(" "),
+
+      outline: [
+        "bg-transparent border border-border-subtle",
+        "text-foreground",
+        "rounded-[13px]",
+        "hover:bg-foreground/5 hover:border-border-subtle-hover",
+      ].join(" "),
+
+      ghost: [
+        "bg-transparent border-transparent",
+        "text-foreground",
+        "rounded-[13px]",
+        "hover:bg-foreground/6",
+      ].join(" "),
+
+      glass: [
+        "bg-glass-bg backdrop-blur-xl",
+        "border border-border-subtle",
+        "text-foreground",
+        "hover:bg-foreground/8 hover:border-border-subtle-hover",
+        "rounded-[13px]",
+      ].join(" "),
+
+      product: [
+        "bg-surface-glass border border-transparent",
+        "text-foreground",
+        "rounded-[13px]",
+        "hover:border-border-subtle",
+      ].join(" "),
     };
 
-    const sizeClasses = {
-      default: "h-[54px] px-6 text-sm",
+    const sizeClasses: Record<string, string> = {
+      /** All heights meet 44px minimum tap target per spec section 7 */
+      default: "h-[54px] px-6 text-sm [font-size:16px] sm:text-sm sm:[font-size:0.875rem]",
       lg: "h-[60px] px-8 text-base",
-      sm: "h-[44px] px-4 text-xs",
-      icon: "h-[54px] w-[54px]"
+      sm: "h-[44px] px-4 text-xs [font-size:16px] sm:text-xs sm:[font-size:0.75rem]",
+      icon: "h-[54px] w-[54px]",
     };
 
-    const combinedClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className || ""}`;
+    const combinedClasses = `${baseClasses} ${variantClasses[variant] || ""} ${sizeClasses[size]} ${className || ""}`;
 
     const innerContent = (
       <>
         {(variant === "primary" || variant === "secondary") && (
-          <>
-            {/* 1px neon gradient border */}
-            <div className="absolute inset-0 rounded-[13px] neon-border-gradient opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            
-            {/* Hover sweeping light */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-[800ms] ease-out pointer-events-none" />
-          </>
+          /* Neon gradient border overlay — opacity only, no transform animation */
+          <div className="absolute inset-0 rounded-[13px] neon-border-gradient opacity-50 group-hover:opacity-80 transition-opacity duration-[var(--duration-fast)] pointer-events-none" />
         )}
         <span className="relative z-10 flex items-center gap-2">
           {asChild && React.isValidElement(children) ? (children as React.ReactElement<any>).props.children : children}
