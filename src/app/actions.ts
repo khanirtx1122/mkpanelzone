@@ -165,60 +165,65 @@ export type LoginResult =
   | null;
 
 export async function customerLogin(prevState: any, formData: FormData): Promise<LoginResult> {
-  const data = Object.fromEntries(formData.entries());
-  const parsed = loginSchema.safeParse(data);
-  if (!parsed.success) return { type: "INVALID_CREDENTIALS" };
+  try {
+    const data = Object.fromEntries(formData.entries());
+    const parsed = loginSchema.safeParse(data);
+    if (!parsed.success) return { type: "INVALID_CREDENTIALS" };
 
-  const customer = await prisma.customer.findUnique({
-    where: { identifier: parsed.data.identifier },
-    include: { devices: true }
-  });
-
-  if (!customer) return { type: "INVALID_CREDENTIALS" };
-
-  const argon2 = await import("argon2");
-  const isValid = await argon2.verify(customer.passwordHash, parsed.data.password);
-  if (!isValid) return { type: "INVALID_CREDENTIALS" };
-
-  if (customer.platformType !== parsed.data.platform) {
-    return { type: "WRONG_PLATFORM" };
-  }
-
-  const { cookies, headers } = await import("next/headers");
-  const headersList = await headers();
-  const userAgent = headersList.get("user-agent") || "unknown";
-    const cookieStore = await cookies();
-
-  if (customer.devices.length === 0) {
-    const newToken = randomBytes(32).toString("hex");
-    const tokenHash = await argon2.hash(newToken);
-    
-    await prisma.customerDevice.create({
-      data: {
-        customerId: customer.id,
-        deviceTokenHash: tokenHash,
-        fingerprint: userAgent,
-      }
+    const customer = await prisma.customer.findUnique({
+      where: { identifier: parsed.data.identifier },
+      include: { devices: true }
     });
 
-    cookieStore.set("device_token", newToken, {
+    if (!customer) return { type: "INVALID_CREDENTIALS" };
+
+    const argon2 = await import("argon2");
+    const isValid = await argon2.verify(customer.passwordHash, parsed.data.password);
+    if (!isValid) return { type: "INVALID_CREDENTIALS" };
+
+    if (customer.platformType !== parsed.data.platform) {
+      return { type: "WRONG_PLATFORM" };
+    }
+
+    const { cookies, headers } = await import("next/headers");
+    const headersList = await headers();
+    const userAgent = headersList.get("user-agent") || "unknown";
+    const cookieStore = await cookies();
+
+    if (customer.devices.length === 0) {
+      const newToken = randomBytes(32).toString("hex");
+      const tokenHash = await argon2.hash(newToken);
+      
+      await prisma.customerDevice.create({
+        data: {
+          customerId: customer.id,
+          deviceTokenHash: tokenHash,
+          fingerprint: userAgent,
+        }
+      });
+
+      cookieStore.set("device_token", newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365 * 10
+      });
+    }
+
+    cookieStore.set("auth_session", customer.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 365 * 10
+      maxAge: 60 * 60 * 24 * 30
     });
+
+    return { type: "SUCCESS" };
+  } catch (error: any) {
+    console.error("Login Error:", error);
+    return { type: "ERROR", message: error?.message || "An unexpected error occurred during login." };
   }
-
-  cookieStore.set("auth_session", customer.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30
-  });
-
-  return { type: "SUCCESS" };
 }
 
 export async function customerLogout() {

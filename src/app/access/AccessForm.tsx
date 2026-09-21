@@ -178,6 +178,15 @@ export function AccessForm() {
                   Invalid customer name or password.
                 </motion.div>
               )}
+              {state?.type === "ERROR" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="text-brand-red-500 text-sm font-medium"
+                >
+                  {state.message}
+                </motion.div>
+              )}
             </AnimatePresence>
 
             <Button type="submit" variant="primary" size="lg" className="w-full mt-2" disabled={pending || isSuccess}>
