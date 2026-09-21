@@ -1,0 +1,213 @@
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
+import { Plus, Edit, Link as LinkIcon, Power, PowerOff, Filter } from "lucide-react";
+import { toggleResourceStatus } from "../actions"; // will create this
+
+export default async function ResourcesPage(props: {
+  searchParams?: Promise<{ packageId?: string; platform?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const packageIdFilter = searchParams?.packageId || "";
+  const platformFilter = searchParams?.platform || "";
+
+  const packages = await prisma.package.findMany({
+    where: platformFilter ? { platformType: platformFilter } : {},
+    orderBy: { name: "asc" }
+  });
+
+  const resources = await prisma.packageResource.findMany({
+    where: {
+      ...(packageIdFilter ? { packageId: packageIdFilter } : {}),
+      ...(platformFilter && !packageIdFilter ? { platformType: platformFilter } : {})
+    },
+    include: { package: true },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const buildUrl = (updates: { platform?: string, packageId?: string }) => {
+    const params = new URLSearchParams();
+    const p = updates.platform !== undefined ? updates.platform : platformFilter;
+    const pkg = updates.packageId !== undefined ? updates.packageId : packageIdFilter;
+    if (p) params.set("platform", p);
+    if (pkg) params.set("packageId", pkg);
+    return `/mkpanelzoneadmin/resources?${params.toString()}`;
+  };
+
+  const addResourceHref = (() => {
+    const params = new URLSearchParams();
+    if (packageIdFilter) params.set("packageId", packageIdFilter);
+    if (platformFilter) params.set("platform", platformFilter);
+    const qs = params.toString();
+    return `/mkpanelzoneadmin/resources/new${qs ? '?' + qs : ''}`;
+  })();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white uppercase font-sans">Resources</h1>
+          <p className="text-sm text-brand-ink-3 mt-1 font-mono">Manage URLs and secrets for packages.</p>
+        </div>
+        <Link
+          href={addResourceHref}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-colors"
+        >
+          <Plus size={16} /> Add Resource
+        </Link>
+      </div>
+
+      <div className="bg-[#0E1420] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
+        <div className="p-4 border-b border-white/5 bg-black/40 flex flex-col gap-4">
+          {/* Platform Tabs */}
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center border-b border-white/5 pb-4">
+            <div className="flex items-center gap-2 text-sm text-brand-ink-3 min-w-[120px]">
+              <Filter size={16} />
+              <span className="font-bold uppercase tracking-widest text-xs">Platform:</span>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto w-full md:w-auto scrollbar-hide">
+              <Link
+                href={buildUrl({ platform: "", packageId: "" })}
+                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap ${
+                  !platformFilter ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
+                }`}
+              >
+                All Platforms
+              </Link>
+              {["ANDROID", "IOS", "PC"].map(plat => (
+                <Link
+                  key={plat}
+                  href={buildUrl({ platform: plat, packageId: "" })}
+                  className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap ${
+                    platformFilter === plat ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  {plat === "IOS" ? "IPHONE / IOS" : plat}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Package Tabs */}
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <div className="flex items-center gap-2 text-sm text-brand-ink-3 min-w-[120px]">
+              <Filter size={16} />
+              <span className="font-bold uppercase tracking-widest text-xs">Package:</span>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto w-full md:w-auto scrollbar-hide">
+              <Link
+                href={buildUrl({ packageId: "" })}
+                className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap ${
+                  !packageIdFilter ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
+                }`}
+              >
+                All Packages
+              </Link>
+              {packages.map(pkg => (
+                <Link
+                  key={pkg.id}
+                  href={buildUrl({ packageId: pkg.id })}
+                  className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap ${
+                    packageIdFilter === pkg.id ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  {pkg.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/5 bg-black/40">
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Resource Name</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Type</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Package</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Status</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {resources.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-brand-ink-3">
+                    No resources found.
+                  </td>
+                </tr>
+              ) : (
+                resources.map(resource => (
+                  <tr key={resource.id} className="hover:bg-white/[0.02] transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded bg-black border border-white/10 flex items-center justify-center flex-shrink-0">
+                          <LinkIcon size={18} className="text-brand-blue-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-white">{resource.name}</div>
+                          <div className="text-xs text-brand-ink-3 font-mono max-w-[200px] truncate">{resource.url || resource.secret}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-mono text-brand-ink-2">
+                      <span className="px-2 py-1 bg-white/5 rounded text-xs font-bold">
+                        {resource.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 flex flex-col gap-1 items-start justify-center min-h-[72px]">
+                      {resource.package ? (
+                        <span className="text-sm font-bold text-white/70">
+                          {resource.package.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono text-brand-ink-3 italic">
+                          Global Resource
+                        </span>
+                      )}
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border bg-white/5 text-white/50 border-white/10">
+                        {resource.platformType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold tracking-wider uppercase border ${
+                        resource.status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-brand-ink-3/10 text-brand-ink-3 border-brand-ink-3/20'
+                      }`}>
+                        {resource.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link 
+                          href={`/mkpanelzoneadmin/resources/${resource.id}`}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition-colors"
+                        >
+                          <Edit size={14} /> Edit
+                        </Link>
+                        <form action={toggleResourceStatus as any}>
+                          <input type="hidden" name="resourceId" value={resource.id} />
+                          <button 
+                            type="submit"
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold uppercase tracking-wider border rounded transition-colors ${
+                              resource.status === 'active' 
+                                ? "text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/20" 
+                                : "text-green-400 bg-green-500/10 hover:bg-green-500/20 border-green-500/20"
+                            }`}
+                          >
+                            {resource.status === 'active' ? <PowerOff size={14} /> : <Power size={14} />}
+                            {resource.status === 'active' ? "Disable" : "Enable"}
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
