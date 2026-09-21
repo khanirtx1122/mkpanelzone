@@ -187,11 +187,7 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
   const { cookies, headers } = await import("next/headers");
   const headersList = await headers();
   const userAgent = headersList.get("user-agent") || "unknown";
-  
-  const cookieStore = await cookies();
-  const existingDeviceToken = cookieStore.get("device_token")?.value;
-
-  let authorized = false;
+    const cookieStore = await cookies();
 
   if (customer.devices.length === 0) {
     const newToken = randomBytes(32).toString("hex");
@@ -212,27 +208,6 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
       path: "/",
       maxAge: 60 * 60 * 24 * 365 * 10
     });
-    authorized = true;
-  } else {
-    if (!existingDeviceToken) {
-      return { type: "DEVICE_MISMATCH" };
-    }
-
-    for (const device of customer.devices) {
-      const match = await argon2.verify(device.deviceTokenHash, existingDeviceToken);
-      if (match) {
-        await prisma.customerDevice.update({
-          where: { id: device.id },
-          data: { lastUsedAt: new Date(), fingerprint: userAgent }
-        });
-        authorized = true;
-        break;
-      }
-    }
-  }
-
-  if (!authorized) {
-    return { type: "DEVICE_MISMATCH" };
   }
 
   cookieStore.set("auth_session", customer.id, {
