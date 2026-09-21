@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
+// Cache buster for Vercel deployment
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
