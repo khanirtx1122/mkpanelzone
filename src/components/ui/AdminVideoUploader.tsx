@@ -88,15 +88,16 @@ export function AdminVideoUploader({
           <span className="text-xs text-white font-mono break-all px-4 text-center">
             {url.split('/').pop()}
           </span>
-          <a href={url} target="_blank" rel="noreferrer" className="text-[10px] text-brand-blue-400 hover:underline mt-2">View File</a>
+          <a href={url} target="_blank" rel="noreferrer" className="text-[10px] text-brand-blue-400 hover:underline mt-2 relative z-10">View File</a>
           
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none md:pointer-events-auto group-hover:pointer-events-auto">
             <button
               type="button"
               onClick={clearVideo}
-              className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors"
+              className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg pointer-events-auto"
+              title="Remove Video"
             >
-              <X size={20} />
+              <X size={24} />
             </button>
           </div>
         </div>

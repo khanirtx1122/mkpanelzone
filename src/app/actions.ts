@@ -562,7 +562,38 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
     return { success: false, error: "Customer identifier already exists." };
   }
 
-  const mockPath = `/uploads/agent-${randomBytes(8).toString("hex")}-${file.name}`;
+  let finalPaymentProofUrl = "";
+
+  try {
+    const { supabase } = await import("@/lib/supabaseClient");
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const originalExt = file.name.split('.').pop() || 'tmp';
+    const filename = `agent-${uniqueSuffix}.${originalExt}`;
+
+    const { error } = await supabase.storage
+      .from('media')
+      .upload(`uploads/${filename}`, buffer, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false
+      });
+
+    if (error) {
+      console.error("Supabase Storage Error (Agent):", error);
+      return { success: false, error: "Failed to upload payment proof image." };
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('media')
+      .getPublicUrl(`uploads/${filename}`);
+
+    finalPaymentProofUrl = publicUrlData.publicUrl;
+  } catch (e: any) {
+    console.error("Upload exception:", e);
+    return { success: false, error: "Failed to upload payment proof image." };
+  }
   
   const argon2 = await import("argon2");
   const passwordHash = await argon2.hash(password);
@@ -575,9 +606,13 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
       packageId,
       createdSource: "AGENT",
       createdByAgentId: agent.id,
-      agentPaymentProof: mockPath
+      agentPaymentProof: finalPaymentProofUrl
     }
   });
+
+  const { revalidatePath } = await import("next/cache");
+  revalidatePath("/mkpanelzoneadmin/customers");
+  revalidatePath("/agent/customers");
 
   return { success: true };
 }

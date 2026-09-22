@@ -75,13 +75,14 @@ export function AdminImageUploader({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt="Uploaded preview" className="w-full h-full object-cover" />
           
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <button
               type="button"
               onClick={clearImage}
-              className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors"
+              className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
+              title="Remove Image"
             >
-              <X size={20} />
+              <X size={24} />
             </button>
           </div>
         </div>

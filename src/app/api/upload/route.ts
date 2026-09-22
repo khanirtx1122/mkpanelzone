@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
+import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,25 +18,29 @@ export async function POST(req: NextRequest) {
     const originalExt = file.name.split('.').pop() || 'tmp';
     const filename = `${uniqueSuffix}.${originalExt}`;
 
-    // Define path to public/uploads
-    const uploadDir = join(process.cwd(), "public", "uploads");
-    
-    // Ensure directory exists
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('media')
+      .upload(`uploads/${filename}`, buffer, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false
+      });
+
+    if (error) {
+      console.error("Supabase Storage Error:", error);
+      // Attempt to automatically create the bucket if it doesn't exist, though it requires service role key typically.
+      // Assuming it's pre-created or the error is handled here.
+      throw new Error(`Supabase upload failed: ${error.message}`);
     }
 
-    const filepath = join(uploadDir, filename);
+    // Get public URL
+    const { data: publicUrlData } = supabase.storage
+      .from('media')
+      .getPublicUrl(`uploads/${filename}`);
 
-    // Write file to disk
-    await writeFile(filepath, buffer);
-
-    // Return the public URL
-    const publicUrl = `/uploads/${filename}`;
-    
-    return NextResponse.json({ url: publicUrl });
-  } catch (error) {
+    return NextResponse.json({ url: publicUrlData.publicUrl });
+  } catch (error: any) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to upload file" }, { status: 500 });
   }
 }
