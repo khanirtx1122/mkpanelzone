@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Upload, X, Loader2, Video as VideoIcon } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 interface AdminVideoUploaderProps {
   name: string;
@@ -14,7 +15,7 @@ export function AdminVideoUploader({
   name,
   defaultValue = "",
   bucket = "media",
-  folder = "videos",
+  folder = "uploads",
 }: AdminVideoUploaderProps) {
   const [url, setUrl] = useState<string>(defaultValue);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,25 +43,30 @@ export function AdminVideoUploader({
         setProgress(p => Math.min(p + 5, 90));
       }, 500);
 
-      const formData = new FormData();
-      formData.append("file", file);
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const originalExt = file.name.split('.').pop() || 'mp4';
+      const filename = `${uniqueSuffix}.${originalExt}`;
+      const filePath = `${folder}/${filename}`;
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          contentType: file.type || 'video/mp4',
+          upsert: false
+        });
 
       clearInterval(progressInterval);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to upload file.");
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      setProgress(100);
+      const { data: publicUrlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
 
-      const data = await response.json();
-      setUrl(data.url);
+      setProgress(100);
+      setUrl(publicUrlData.publicUrl);
     } catch (err: any) {
       console.error("Upload error:", err);
       setError(err.message || "Failed to upload file.");
