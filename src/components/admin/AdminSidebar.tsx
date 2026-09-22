@@ -94,7 +94,7 @@ export function AdminSidebar({ username }: { username: string }) {
   return (
     <>
       {/* Mobile Top Header (replaces the desktop sidebar header on small screens) */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-black z-30 sticky top-0">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-black z-[100] sticky top-0 relative">
         <div className="flex items-center gap-3 text-brand-blue-500">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue-500/20 to-brand-blue-600/10 border border-brand-blue-500/20 flex items-center justify-center">
             <Shield size={16} className="text-brand-blue-400" />
@@ -105,7 +105,7 @@ export function AdminSidebar({ username }: { username: string }) {
         </div>
         <button 
           onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="p-2 text-brand-ink-2 hover:text-white transition-colors"
+          className="p-2 text-brand-ink-2 hover:text-white transition-colors relative z-[110] cursor-pointer"
         >
           <Menu size={24} />
         </button>
@@ -114,14 +114,14 @@ export function AdminSidebar({ username }: { username: string }) {
       {/* Sidebar Overlay (Mobile) */}
       {isMobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          className="fixed inset-0 bg-black/50 z-[90] md:hidden backdrop-blur-sm"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:sticky top-0 left-0 h-screen w-64 lg:w-72 bg-[#05070C] border-r border-white/5 flex flex-col shrink-0 z-40 transition-transform duration-300
+        fixed md:sticky top-0 left-0 h-screen w-64 lg:w-72 bg-[#05070C] border-r border-white/5 flex flex-col shrink-0 z-[100] transition-transform duration-300
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         {/* Desktop Header */}

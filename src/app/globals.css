@@ -778,3 +778,13 @@ html[data-perf="low"] .animate-dot-pulse { animation: none; }
    PRESS FEEDBACK — 98% scale on tap (mobile-first)
    ================================================================ */
 .press-98:active { transform: scale(0.98); }
+  
+/* Hero Slider Track */  
+.hero-slider-track {  
+  --card-width: 100%;  
+  transform: translateX(calc( (100% - var(--card-width)) / 2 - (var(--current-index) * var(--card-width)) + var(--drag-offset) ));  
+  transition: var(--slider-transition);  
+}  
+@media (min-width: 640px) { .hero-slider-track { --card-width: 85%; } }  
+@media (min-width: 768px) { .hero-slider-track { --card-width: 60%; } }  
+@media (min-width: 1024px) { .hero-slider-track { --card-width: 45%; } }
