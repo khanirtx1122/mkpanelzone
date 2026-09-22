@@ -94,7 +94,7 @@ export function AdminSidebar({ username }: { username: string }) {
   return (
     <>
       {/* Mobile Top Header (replaces the desktop sidebar header on small screens) */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-black z-[100] sticky top-0 relative">
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-black z-[100] sticky top-0">
         <div className="flex items-center gap-3 text-brand-blue-500">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue-500/20 to-brand-blue-600/10 border border-brand-blue-500/20 flex items-center justify-center">
             <Shield size={16} className="text-brand-blue-400" />
@@ -104,10 +104,15 @@ export function AdminSidebar({ username }: { username: string }) {
           </div>
         </div>
         <button 
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="p-2 text-brand-ink-2 hover:text-white transition-colors relative z-[110] cursor-pointer"
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            setIsMobileOpen(!isMobileOpen);
+          }}
+          className="p-3 text-brand-ink-2 hover:text-white transition-colors cursor-pointer pointer-events-auto relative z-[110]"
+          aria-label="Toggle Menu"
         >
-          <Menu size={24} />
+          <Menu size={28} className="pointer-events-none" />
         </button>
       </div>
 
