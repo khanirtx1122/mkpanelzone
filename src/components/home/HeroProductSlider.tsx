@@ -245,7 +245,7 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
             const { badge, Icon, colorTheme } = getMeta(product.slug);
             const content = productContent[product.slug];
             const coverImage = product.coverImageUrl || content?.image;
-            const shortDesc = content?.description || "Premium digital product and access.";
+            const shortDesc = product.description || "Premium digital product and access.";
 
             return (
               <div 
