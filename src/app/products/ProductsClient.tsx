@@ -92,52 +92,52 @@ export function ProductsClient({ initialProducts }: { initialProducts: Product[]
   const panelProducts = initialProducts.filter(p => !p.slug.includes("setup") && !p.slug.includes("support"));
 
   return (
-    <div className="space-y-16 sm:space-y-24 mb-24">
-      {/* TOOLBAR */}
-      <div className="sticky top-[60px] sm:top-[72px] z-40 bg-background/80 backdrop-blur-xl border-b border-border-subtle py-3 sm:py-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+    <div className="space-y-12 sm:space-y-20 mb-24">
+      {/* TOOLBAR — premium filter chips */}
+      <div className="sticky top-[60px] sm:top-[72px] z-40 bg-background/85 backdrop-blur-xl border-b border-border-subtle py-3 -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="max-w-[1120px] mx-auto flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
           
-          {/* Tabs */}
-          <div className="flex gap-2 overflow-x-auto no-scrollbar mask-edges pb-1 sm:pb-0">
-            {["all", "panels", "add-ons"].map((cat) => (
+          {/* Premium filter chips — horizontally scrollable */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+            {[
+              { key: "all", label: "All" },
+              { key: "panels", label: "Panels" },
+              { key: "add-ons", label: "Add-Ons" },
+            ].map(({ key, label }) => (
               <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                className={`px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-[12px] sm:text-[14px] font-bold tracking-wide uppercase transition-all whitespace-nowrap ${
-                  categoryParam === cat 
-                    ? "bg-foreground text-background shadow-[0_0_15px_rgba(255,255,255,0.3)]" 
-                    : "bg-surface-glass text-brand-ink-3 hover:bg-white/10 hover:text-foreground"
-                }`}
+                key={key}
+                onClick={() => setCategory(key)}
+                className={`filter-chip${categoryParam === key ? " active" : ""}`}
               >
-                {cat.replace("-", " ")}
+                {label}
               </button>
             ))}
           </div>
 
           {/* Search & Sort */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="relative flex-1 sm:w-[240px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-3" />
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="relative flex-1 min-w-0 sm:w-[220px]">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-3" />
               <input 
                 type="text"
-                placeholder="Search products..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-surface-glass border border-border-subtle rounded-full py-1.5 sm:py-2 pl-9 pr-4 text-[12px] sm:text-[14px] text-foreground placeholder:text-brand-ink-3/50 focus:outline-none focus:border-brand-neon-blue focus:ring-1 focus:ring-brand-neon-blue transition-colors"
+                className="w-full bg-surface-glass border border-border-subtle rounded-full h-[36px] pl-8 pr-4 text-[13px] text-foreground placeholder:text-brand-ink-3/50 focus:outline-none focus:border-brand-neon-blue transition-colors"
               />
             </div>
             
-            <div className="relative">
+            <div className="relative shrink-0">
               <select
                 value={sortParam}
                 onChange={(e) => setSort(e.target.value)}
-                className="appearance-none bg-surface-glass border border-border-subtle rounded-full py-1.5 sm:py-2 pl-4 pr-10 text-[12px] sm:text-[14px] font-medium text-foreground focus:outline-none focus:border-brand-neon-blue cursor-pointer"
+                className="appearance-none bg-surface-glass border border-border-subtle rounded-full h-[36px] pl-3 pr-9 text-[12px] font-bold text-foreground focus:outline-none focus:border-brand-neon-blue cursor-pointer uppercase tracking-wide"
               >
-                <option value="featured" className="bg-background">Featured</option>
-                <option value="price-asc" className="bg-background">Price: Low to High</option>
-                <option value="price-desc" className="bg-background">Price: High to Low</option>
+                <option value="featured" className="bg-background normal-case font-normal">Featured</option>
+                <option value="price-asc" className="bg-background normal-case font-normal">Price ↑</option>
+                <option value="price-desc" className="bg-background normal-case font-normal">Price ↓</option>
               </select>
-              <SlidersHorizontal size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-ink-3 pointer-events-none" />
+              <SlidersHorizontal size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-ink-3 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -223,13 +223,13 @@ export function ProductsClient({ initialProducts }: { initialProducts: Product[]
            <div className="text-center py-32 border border-white/5 rounded-2xl bg-white/[0.02]">
              <Search size={48} className="mx-auto text-brand-ink-3 mb-6 opacity-50" />
              <h3 className="text-xl font-bold text-foreground mb-2">No products found</h3>
-             <p className="text-brand-ink-3">Try adjusting your search or filters to find what you're looking for.</p>
+             <p className="text-brand-ink-3">Try adjusting your search or filters to find what you&apos;re looking for.</p>
              <button onClick={clearFilters} className="mt-6 px-6 py-2 bg-white/10 hover:bg-white/20 text-foreground rounded-full font-bold text-sm transition-colors">
                Reset all filters
              </button>
            </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
             <AnimatePresence mode="popLayout">
               {filteredProducts.slice(0, 6).map((product, i) => (
                 <motion.div
@@ -258,7 +258,7 @@ export function ProductsClient({ initialProducts }: { initialProducts: Product[]
         <section className="max-w-[1120px] mx-auto hidden md:block html-[data-perf='full']:content-visibility-auto">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-4">Compare Panel Plans</h2>
-            <p className="text-brand-ink-3">Detailed breakdown of what's included in each package.</p>
+            <p className="text-brand-ink-3">Detailed breakdown of what&apos;s included in each package.</p>
           </div>
           
           <div className="overflow-x-auto rounded-2xl border border-border-subtle bg-surface">

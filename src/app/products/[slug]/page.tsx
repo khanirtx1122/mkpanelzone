@@ -155,12 +155,12 @@ export default async function ProductDetailsPage({ params }: Props) {
                 </div>
               )}
               
-              <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold text-foreground mb-4 sm:mb-6 tracking-tight line-clamp-2">
+              <h1 className="font-extrabold text-foreground mb-4 sm:mb-6 tracking-tight line-clamp-2" style={{ fontSize: "clamp(26px, 6vw, 60px)" }}>
                 {product.name}
               </h1>
               
               <div className="flex items-end gap-3 mb-6">
-                <div className="text-4xl sm:text-5xl font-extrabold text-foreground tracking-tight">PKR {product.price.toFixed(2)}</div>
+                <div className="font-extrabold text-foreground tracking-tight" style={{ fontSize: "clamp(32px, 7vw, 48px)" }}>PKR {product.price.toFixed(2)}</div>
                 {content && (
                   <div className="text-[12px] sm:text-[14px] text-brand-ink-3 font-bold uppercase tracking-widest mb-1.5">{content.durationLabel}</div>
                 )}
@@ -249,7 +249,7 @@ export default async function ProductDetailsPage({ params }: Props) {
         {relatedProducts.length > 0 && (
           <div className="border-t border-border-subtle pt-16 sm:pt-24 html-[data-perf='full']:content-visibility-auto">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mb-8">Related Products</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
               {relatedProducts.map((p, i) => (
                 <ProductCard key={p.id} product={p as any} index={i} />
               ))}

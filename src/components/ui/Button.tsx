@@ -27,17 +27,20 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantClasses: Record<string, string> = {
       /**
-       * primary — solid neon-glass fill that is actually visible.
-       * Background: a real branded tint so it reads as "primary CTA".
-       * Border gradient overlay is decorative, not structural contrast.
+       * primary — deep cobalt gradient, subtle top highlight, refined shadow
+       * Designed to feel expensive — not default Tailwind blue.
        */
       primary: [
-        "bg-brand-blue-500 text-white",
-        "shadow-[0_0_0_1px_rgba(77,163,255,0.4)]",
-        "hover:bg-brand-blue-500/90",
+        "text-white",
         "rounded-[13px]",
-        // Light theme: stronger branded fill
-        "[data-theme='light']_&:bg-brand-blue-700",
+        // Gradient via inline style applied through a wrapper pseudo-approach:
+        // We bake the gradient as a class-compatible approach using a hard-coded gradient class
+        "[background:linear-gradient(160deg,#2F5FD0_0%,#1A3499_100%)]",
+        "[box-shadow:0_4px_14px_rgba(47,95,208,0.35),inset_0_1px_0_rgba(255,255,255,0.10)]",
+        "hover:opacity-90",
+        // Light theme: stronger cobalt (less translucent)
+        "[data-theme='light']_&:[background:linear-gradient(160deg,#2F5FD0_0%,#1E3FA8_100%)]",
+        "[data-theme='light']_&:[box-shadow:0_4px_14px_rgba(47,95,208,0.3),inset_0_1px_0_rgba(255,255,255,0.15)]",
       ].join(" "),
 
       secondary: [
@@ -45,6 +48,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         "rounded-[13px]",
         "border border-border-subtle hover:border-border-subtle-hover",
         "hover:bg-surface-raised",
+        "[box-shadow:var(--shadow-card)]",
       ].join(" "),
 
       outline: [
@@ -62,11 +66,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       ].join(" "),
 
       glass: [
-        "bg-glass-bg backdrop-blur-xl",
+        "backdrop-blur-sm",
         "border border-border-subtle",
         "text-foreground",
-        "hover:bg-foreground/8 hover:border-border-subtle-hover",
         "rounded-[13px]",
+        "hover:border-border-subtle-hover hover:bg-foreground/5",
+        "[background:var(--glass-bg)]",
       ].join(" "),
 
       product: [
@@ -79,19 +84,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const sizeClasses: Record<string, string> = {
       /** All heights meet 44px minimum tap target per spec section 7 */
-      default: "h-[54px] px-6 text-sm [font-size:16px] sm:text-sm sm:[font-size:0.875rem]",
-      lg: "h-[60px] px-8 text-base",
-      sm: "h-[44px] px-4 text-xs [font-size:16px] sm:text-xs sm:[font-size:0.75rem]",
-      icon: "h-[54px] w-[54px]",
+      default: "h-[48px] px-6 text-[14px] tracking-[0.06em]",
+      lg:      "h-[56px] px-8 text-[15px] tracking-[0.06em]",
+      sm:      "h-[44px] px-4 text-[13px] tracking-[0.05em]",
+      icon:    "h-[48px] w-[48px]",
     };
 
     const combinedClasses = `${baseClasses} ${variantClasses[variant] || ""} ${sizeClasses[size]} ${className || ""}`;
 
     const innerContent = (
       <>
-        {(variant === "primary" || variant === "secondary") && (
-          /* Neon gradient border overlay — opacity only, no transform animation */
-          <div className="absolute inset-0 rounded-[13px] neon-border-gradient opacity-50 group-hover:opacity-80 transition-opacity duration-[var(--duration-fast)] pointer-events-none" />
+        {variant === "primary" && (
+          /* Top-edge internal highlight stripe — baked, no animation */
+          <div className="absolute inset-x-0 top-0 h-[1px] bg-white/12 rounded-t-[13px] pointer-events-none" />
         )}
         <span className="relative z-10 flex items-center gap-2">
           {asChild && React.isValidElement(children) ? (children as React.ReactElement<any>).props.children : children}

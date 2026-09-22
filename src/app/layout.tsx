@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { prisma } from "@/lib/prisma";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { GlobalPopupProvider } from "@/components/providers/GlobalPopupProvider";
+import Script from "next/script";
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-heading",
@@ -77,10 +78,29 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script
+        {/* Theme anti-flash: reads localStorage before hydration so no light→dark flicker */}
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem("theme");
+                  var theme = saved ? saved : "dark";
+                  document.documentElement.setAttribute("data-theme", theme);
+                } catch(e) {
+                  document.documentElement.setAttribute("data-theme", "dark");
+                }
+              })();
+            `
+          }}
+        />
+        <Script
           id="perf-probe"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -161,7 +181,7 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute="data-theme"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem={false}
           disableTransitionOnChange
         >

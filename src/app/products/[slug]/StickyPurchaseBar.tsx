@@ -33,10 +33,11 @@ export function StickyPurchaseBar({ price, slug, name }: { price: number, slug: 
         </div>
         <Link 
           href={`/checkout/${slug}`}
-          className="group relative h-10 sm:h-12 px-6 rounded-lg flex items-center justify-center bg-foreground border border-transparent transition-all active:scale-[0.98] overflow-hidden"
+          className="group relative h-11 sm:h-12 px-6 rounded-xl flex items-center justify-center transition-all active:scale-[0.98] overflow-hidden shadow-[0_4px_16px_rgba(47,95,208,0.32)] border border-[rgba(77,163,255,0.35)]"
+          style={{ background: "linear-gradient(135deg,#1E3FA8,#2F5FD0)" }}
         >
-          <span className="relative z-10 text-[12px] sm:text-[14px] font-bold tracking-[0.05em] uppercase text-background flex items-center gap-2 whitespace-nowrap">
-            Buy Now
+          <span className="relative z-10 text-[12px] sm:text-[13px] font-bold tracking-[0.05em] uppercase text-white flex items-center gap-2 whitespace-nowrap">
+            Purchase
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </span>
         </Link>
