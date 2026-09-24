@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Customer {
+  id                String           @id @default(uuid())
+  identifier        String           @unique
+  passwordHash      String
+  platformType      String           @default("ANDROID")
+  packageId         String?
+  status            String           @default("active")
+  createdSource     String           @default("MIGRATED")
+  createdByAgentId  String?
+  agentPaymentProof String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  agent             Agent?           @relation(fields: [createdByAgentId], references: [id])
+  package           Package?         @relation(fields: [packageId], references: [id])
+  devices           CustomerDevice[]
+}
+
+model Agent {
+  id               String     @id @default(uuid())
+  username         String     @unique
+  passwordHash     String
+  role             String     @default("AGENT")
+  status           String     @default("ACTIVE")
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  createdCustomers Customer[]
+}
+
+model Package {
+  id                 String            @id @default(uuid())
+  name               String
+  description        String?
+  platformType       String            @default("ANDROID")
+  isDefaultForAgents Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  customers          Customer[]
+  resources          PackageResource[]
+}
+
+model PackageResource {
+  id           String   @id @default(uuid())
+  packageId    String?
+  platformType String   @default("ANDROID")
+  type         String
+  name         String
+  description  String?
+  url          String?
+  secret       String?
+  version      String?
+  status       String   @default("active")
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  package      Package? @relation(fields: [packageId], references: [id])
+}
+
+model CustomerDevice {
+  id              String   @id @default(uuid())
+  customerId      String
+  deviceTokenHash String   @unique
+  fingerprint     String?
+  createdAt       DateTime @default(now())
+  lastUsedAt      DateTime @default(now())
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description        String?
+  price              Float
+  active             Boolean  @default(true)
+  coverImageUrl      String?
+  demoVideoUrl       String?
+  demoVideoType      String?  @default("DIRECT")
+  demoVideoPosterUrl String?
+  videoAutoplay      Boolean  @default(true)
+  videoMutedDefault  Boolean  @default(true)
+  videoLoop          Boolean  @default(false)
+  videoEnabled       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  orders      Order[]
+}
+
+model Order {
+  id               String   @id @default(uuid())
+  orderNumber      String   @unique
+  productId        String
+  priceSnapshot    Float
+  customerEmail    String
+  customerDiscord  String?
+  paymentProofPath String?
+  amountReported   Float?
+  amountMatches    Boolean?
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  product          Product  @relation(fields: [productId], references: [id])
+}
+
+model PaymentMethod {
+  id             String   @id @default(uuid())
+  name           String
+  accountDetails String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SiteSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id        String    @id @default(uuid())
+  title     String?
+  message   String
+  link      String?
+  type      String    @default("INFO")
+  scope     String    @default("ALL")
+  active    Boolean   @default(true)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Popup {
+  id          String    @id @default(uuid())
+  title       String
+  message     String
+  imageUrl    String?
+  buttonText  String?
+  buttonLink  String?
+  scope       String    @default("ALL")
+  frequency   String    @default("ONCE_PER_SESSION")
+  active      Boolean   @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
