@@ -34,7 +34,7 @@ export default async function AgentDashboardPage() {
   try {
     sessionData = JSON.parse(sessionValue);
   } catch (e) {
-    console.error("[page.tsx] unexpected failure:", e);
+    console.error("page.tsx: unexpected failure:", e);
     return null;
   }
 

@@ -191,7 +191,7 @@ export function CheckoutForm({ productId, planPrice }: Props) {
         router.push(`/order/success?number=${res.orderRef}`);
       }, 400);
     } catch (err) {
-      console.error("[CheckoutForm.tsx] unexpected failure:", err);
+      console.error("CheckoutForm.tsx: unexpected failure:", err);
       setStatus("error");
       setErrors({ form: "Network error. Please try again." });
     }

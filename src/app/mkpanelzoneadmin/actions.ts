@@ -91,7 +91,7 @@ export async function adminUpdateCustomerStatus(id: string, newStatus: string) {
     revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update status." };
   }
 }
@@ -109,7 +109,7 @@ export async function adminSetCustomerPassword(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to set new password." };
   }
 }
@@ -126,7 +126,7 @@ export async function adminResetCustomerDevice(customerId: string) {
     revalidatePath(`/mkpanelzoneadmin/customers/${customerId}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to reset device." };
   }
 }
@@ -151,7 +151,7 @@ export async function adminChangeCustomerPlatform(id: string, platformType: stri
     revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update platform/package." };
   }
 }
@@ -205,7 +205,7 @@ export async function adminToggleAgentStatus(id: string, currentStatus: string) 
     revalidatePath(`/mkpanelzoneadmin/agents/${id}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update agent status." };
   }
 }
@@ -223,7 +223,7 @@ export async function adminSetAgentPassword(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to reset password." };
   }
 }
@@ -248,7 +248,7 @@ export async function updateOrderStatus(formData: FormData) {
     revalidatePath(`/mkpanelzoneadmin/orders/${orderId}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update order status." };
   }
 }
@@ -274,7 +274,7 @@ export async function toggleProductStatus(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/products");
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to toggle product status." };
   }
 }
@@ -290,7 +290,7 @@ export async function deleteProduct(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/products");
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to delete product." };
   }
 }
@@ -316,7 +316,7 @@ export async function togglePaymentMethod(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/payments");
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to toggle payment method." };
   }
 }
@@ -342,7 +342,7 @@ export async function toggleResourceStatus(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/resources");
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to toggle resource status." };
   }
 }
@@ -408,7 +408,7 @@ export async function saveSettings(prevState: ActionState | null, formData: Form
     
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to save settings." };
   }
 }

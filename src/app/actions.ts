@@ -473,7 +473,7 @@ export async function toggleAgentStatus(id: string, currentStatus: string) {
     revalidatePath("/mkpanelzoneadmin/agents");
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update agent status" };
   }
 }
@@ -491,7 +491,7 @@ export async function resetAgentPassword(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to reset password" };
   }
 }
@@ -526,7 +526,7 @@ export async function performCustomerStatusToggle(id: string, currentStatus: str
     revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to update customer status" };
   }
 }
@@ -543,7 +543,7 @@ export async function resetCustomerDevice(customerId: string) {
     revalidatePath(`/mkpanelzoneadmin/customers/${customerId}`);
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to reset device" };
   }
 }
@@ -561,7 +561,7 @@ export async function resetCustomerPasswordOwner(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
-    console.error("[actions.ts] unexpected failure:", error);
+    console.error("actions.ts: unexpected failure:", error);
     return { error: "Failed to reset password" };
   }
 }
@@ -578,7 +578,7 @@ export async function createAgent(prevState: ActionState | null, formData: FormD
     const session = JSON.parse(sessionValue);
     sessionId = session.userId;
   } catch (e) {
-    console.error("[actions.ts] unexpected failure:", e);
+    console.error("actions.ts: unexpected failure:", e);
     // Fallback if not JSON
   }
   
@@ -626,7 +626,7 @@ export async function agentCreateCustomer(prevState: ActionState | null, formDat
     const session = JSON.parse(sessionValue);
     sessionId = session.userId;
   } catch (e) {
-    console.error("[actions.ts] unexpected failure:", e);
+    console.error("actions.ts: unexpected failure:", e);
     // Fallback if not JSON
   }
   

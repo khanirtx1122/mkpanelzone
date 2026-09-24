@@ -32,7 +32,7 @@ export default async function AgentLayout({ children }: { children: React.ReactN
   try {
     sessionData = JSON.parse(sessionValue);
   } catch (e) {
-    console.error("[layout.tsx] unexpected failure:", e);
+    console.error("layout.tsx: unexpected failure:", e);
     redirect("/mk-agents");
   }
 
