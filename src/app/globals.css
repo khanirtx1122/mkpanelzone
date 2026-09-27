@@ -369,107 +369,112 @@ html[data-perf="low"] .page-fadein {
 html[data-intro="off"] #mk-intro { display: none !important; }
 
 /* ================================================================
-   INTRO ANIMATIONS — untouched (failsafe logic preserved)
+   INTRO ANIMATIONS — Custom 3.5s Premium Sequence
    ================================================================ */
 .intro-container {
-  animation: intro-container-anim 4.2s forwards;
+  animation: intro-bg-fade 3.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-@keyframes intro-container-anim {
-  0%, 95% { opacity: 1; pointer-events: auto; }
+@keyframes intro-bg-fade {
+  0%, 75% { opacity: 1; pointer-events: auto; }
   100% { opacity: 0; pointer-events: none; visibility: hidden; }
 }
-.intro-light-left {
-  animation: intro-light-left-anim 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+
+.intro-core-container {
+  animation: intro-core-transform 3.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-@keyframes intro-light-left-anim {
-  0%, 10% { opacity: 0; transform: translate(10%, 10%); }
-  50% { opacity: 0.8; }
-  100% { opacity: 1; transform: translate(0, 0); }
+@keyframes intro-core-transform {
+  0%, 75% { transform: scale(1) translateY(0); }
+  100% { transform: scale(0.95) translateY(-20px); opacity: 0; }
 }
-.intro-light-right {
-  animation: intro-light-right-anim 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-light-right-anim {
-  0%, 10% { opacity: 0; transform: translate(-10%, -10%); }
-  50% { opacity: 0.8; }
-  100% { opacity: 1; transform: translate(0, 0); }
-}
-.intro-glow {
-  animation: intro-glow-anim 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-glow-anim {
-  0%, 20% { opacity: 0; }
-  60% { opacity: 0.6; }
-  100% { opacity: 1; }
-}
-.intro-grid {
-  animation: intro-grid-anim 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-grid-anim {
-  0%, 25% { opacity: 0; }
-  100% { opacity: 0.4; }
-}
-.intro-particle {
-  animation: intro-particle-anim 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-particle-anim {
-  0% { opacity: 0; transform: scale(0.5) translate(var(--tx), var(--ty)); }
-  20% { opacity: 0.8; }
-  100% { opacity: 0; transform: scale(0) translate(0, 0); }
-}
-.intro-sweep-left {
-  animation: intro-sweep-left-anim 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-sweep-left-anim {
-  0%, 60% { transform: scaleX(0); opacity: 0; }
-  80% { transform: scaleX(1); opacity: 1; }
-  100% { opacity: 0; transform: translateX(100%); }
-}
-.intro-sweep-right {
-  animation: intro-sweep-right-anim 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-sweep-right-anim {
-  0%, 60% { transform: scaleX(0); opacity: 0; }
-  80% { transform: scaleX(1); opacity: 1; }
-  100% { opacity: 0; transform: translateX(-100%); }
-}
-.intro-pulse {
-  animation: intro-pulse-anim 1.2s ease-out forwards;
-}
-@keyframes intro-pulse-anim {
-  0%, 70% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-  75% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(8); opacity: 0; }
-}
-.intro-char {
-  animation: intro-char-anim 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+
+/* Stage 1: Signal */
+.intro-signal-line {
+  animation: intro-signal-anim 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
-  transform: translateY(40px) scale(1.1);
+  width: 0px;
 }
-@keyframes intro-char-anim {
-  0% { opacity: 0; transform: translateY(40px) scale(1.1); filter: blur(8px); }
-  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); }
+@keyframes intro-signal-anim {
+  0% { opacity: 0; width: 0px; }
+  5% { opacity: 1; width: 20px; }
+  30% { opacity: 1; width: 140px; }
+  50% { opacity: 0; width: 200px; }
+  100% { opacity: 0; width: 200px; }
 }
-html[data-perf="low"] .intro-char { animation-name: intro-char-lite-anim; }
-@keyframes intro-char-lite-anim {
-  0% { opacity: 0; transform: translateY(40px) scale(1.1); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+
+/* Stage 2: Technical Structure */
+.intro-corner {
+  opacity: 0;
+  animation: intro-corner-anim 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.intro-sheen { animation: intro-sheen-anim 2s forwards; }
-@keyframes intro-sheen-anim {
-  0%, 80% { transform: translateX(-150%) skewX(12deg); }
-  100% { transform: translateX(150%) skewX(12deg); }
+@keyframes intro-corner-anim {
+  0%, 12% { opacity: 0; transform: scale(0.5); }
+  25%, 75% { opacity: 1; transform: scale(1); }
+  85%, 100% { opacity: 0; transform: scale(1.2); }
 }
-.intro-line { animation: intro-line-anim 0.5s ease-out forwards; opacity: 0; }
-@keyframes intro-line-anim {
-  0% { transform: scaleX(0); opacity: 0; }
-  100% { transform: scaleX(1); opacity: 1; }
+.intro-marker {
+  opacity: 0;
+  animation: intro-marker-anim 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.intro-bar-container { animation: intro-fadein 0.2s forwards; opacity: 0; }
-.intro-bar-fill { animation: intro-bar-anim 0.6s linear forwards; width: 0%; }
-@keyframes intro-bar-anim { 0% { width: 0%; } 100% { width: 100%; } }
-.intro-text-fadein { animation: intro-fadein 0.3s forwards; opacity: 0; }
-@keyframes intro-fadein { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes intro-marker-anim {
+  0%, 15% { opacity: 0; transform: translateY(10px) translateX(-50%); }
+  25%, 75% { opacity: 1; transform: translateY(0) translateX(-50%); }
+  85%, 100% { opacity: 0; transform: translateY(-10px) translateX(-50%); }
+}
+
+/* Stage 3: Wordmark */
+.intro-wordmark {
+  opacity: 0;
+  animation: intro-wordmark-anim 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes intro-wordmark-anim {
+  0%, 27% { opacity: 0; transform: translateY(15px); filter: blur(4px); letter-spacing: -2px; }
+  55%, 100% { opacity: 1; transform: translateY(0); filter: blur(0px); letter-spacing: 0px; }
+}
+.intro-wordmark-wrapper {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.intro-crimson-accent {
+  opacity: 0;
+  animation: intro-crimson-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes intro-crimson-anim {
+  0%, 35% { opacity: 0; width: 0px; }
+  50%, 75% { opacity: 1; width: 16px; }
+  85%, 100% { opacity: 0; width: 32px; }
+}
+
+/* Stage 4: Light Pass */
+.intro-light-pass {
+  opacity: 0;
+  transform: translateX(-150%) skewX(-15deg);
+  animation: intro-light-pass-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes intro-light-pass-anim {
+  0%, 50% { opacity: 0; transform: translateX(-150%) skewX(-15deg); }
+  55% { opacity: 1; }
+  68% { opacity: 1; transform: translateX(150%) skewX(-15deg); }
+  100% { opacity: 0; transform: translateX(150%) skewX(-15deg); }
+}
+
+/* Stage 5: Descriptor */
+.intro-descriptor {
+  opacity: 0;
+  animation: intro-descriptor-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes intro-descriptor-anim {
+  0%, 58% { opacity: 0; transform: translateY(8px); filter: blur(2px); }
+  75%, 100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
+}
+
+.intro-status {
+  opacity: 0;
+  animation: intro-status-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes intro-status-anim {
+  0%, 65% { opacity: 0; transform: translateY(4px); }
+  80%, 100% { opacity: 1; transform: translateY(0); }
+}
 
 /* ================================================================
    NEON UTILITIES — power-on & sheen only (breathe REMOVED per 6.5)
