@@ -112,12 +112,12 @@ export function ProductCard({
   return (
     <div
       ref={cardRef}
-      className="h-full relative group/card card-entrance transition-transform duration-200"
+      className="h-full relative group/card card-entrance"
       style={{ animationDelay: `${index * 70}ms` }}
     >
       <Link
         href={`/products/${product.slug}`}
-        className="block h-full press-98 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-[22px]"
+        className="block h-full tap-flat press-98 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-[22px]"
         aria-label={`${product.name} — PKR ${product.price.toFixed(0)}`}
       >
         <div 
@@ -126,6 +126,12 @@ export function ProductCard({
         >
           {/* Top-edge highlight */}
           <div className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: "var(--border-top-highlight)" }} />
+
+          {/* Hover edge light — restrained, accent-matched */}
+          <div
+            className="absolute inset-x-0 top-0 h-[2px] opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{ background: `linear-gradient(90deg, transparent, ${accentHex}, transparent)` }}
+          />
 
           {/* Featured accent edges */}
           {featured && (
@@ -147,13 +153,7 @@ export function ProductCard({
                   sizes="(max-width: 640px) 95vw, (max-width: 1024px) 48vw, 33vw"
                   loading={index < 3 ? "eager" : "lazy"}
                 />
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background:
-                      "linear-gradient(to bottom, rgba(15,23,42,0.05) 0%, rgba(15,23,42,0.35) 60%, rgba(15,23,42,0.72) 100%)",
-                  }}
-                />
+                <div className="absolute inset-0 pointer-events-none card-img-overlay" />
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
@@ -239,11 +239,19 @@ export function ProductCard({
             <div className="flex items-center justify-between gap-3 min-w-0">
               {/* Price */}
               <div className="flex flex-col min-w-0">
-                <span 
-                  className="tabular-nums font-extrabold text-foreground tracking-tight leading-none"
-                  style={{ fontSize: "clamp(17px,4.8vw,22px)" }}
+                <span
+                  className="flex items-baseline gap-1.5 min-w-0"
+                  aria-label={`PKR ${product.price.toFixed(0)}`}
                 >
-                  PKR {product.price.toFixed(0)}
+                  <span className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-[0.1em] self-center pt-px">
+                    PKR
+                  </span>
+                  <span
+                    className="tabular-nums font-extrabold text-foreground tracking-tight leading-none truncate"
+                    style={{ fontSize: "clamp(17px,4.8vw,22px)" }}
+                  >
+                    {product.price.toFixed(0)}
+                  </span>
                 </span>
                 {content && (
                   <span className="text-[10px] sm:text-[11px] text-brand-ink-3 font-medium mt-0.5 uppercase tracking-wide">
@@ -254,7 +262,7 @@ export function ProductCard({
 
               {/* CTA */}
               <div
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[11px] text-[11px] sm:text-[12px] font-bold tracking-[0.05em] uppercase text-white border shrink-0 transition-transform group-hover/card:scale-[1.02]"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[11px] text-[11px] sm:text-[12px] font-bold tracking-[0.05em] uppercase text-white border shrink-0 transition-transform duration-300 group-hover/card:scale-[1.03]"
                 style={{
                   background: ctaGradient,
                   boxShadow: ctaShadow,
@@ -262,7 +270,10 @@ export function ProductCard({
                 }}
               >
                 VIEW
-                <ArrowRight size={12} />
+                <ArrowRight
+                  size={12}
+                  className="transition-transform duration-300 group-hover/card:translate-x-0.5"
+                />
               </div>
             </div>
           </div>

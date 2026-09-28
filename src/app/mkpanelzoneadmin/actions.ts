@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { FREE_PANEL_SETTING_KEY, sanitizeUrl } from "@/lib/freePanel";
+import { revalidatePath as _revalidate } from "next/cache";
 
 async function ensureOwner() {
   // Bypass session check as requested by the user
@@ -345,6 +347,24 @@ export async function saveSettings(formData: FormData) {
       });
     }
 
+    // Hero Top CTA — sanitize the link server-side (internal or https:// only).
+    if (formData.has("hero_cta_enabled")) {
+      const rawLink = (formData.get("hero_cta_link") as string | null)?.trim() ?? "";
+      let safeLink = "";
+      if (rawLink.startsWith("/")) safeLink = rawLink;
+      else {
+        try {
+          const u = new URL(rawLink);
+          if (u.protocol === "https:" || u.protocol === "http:") safeLink = rawLink;
+        } catch { /* unsafe/invalid → store empty */ }
+      }
+      await prisma.siteSetting.upsert({
+        where: { key: "hero_cta" },
+        update: { value: JSON.stringify({ enabled: formData.get("hero_cta_enabled") === "on", text: (formData.get("hero_cta_text") as string | null)?.trim() || "", link: safeLink, newTab: formData.get("hero_cta_new_tab") === "on" }) },
+        create: { key: "hero_cta", value: JSON.stringify({ enabled: false, text: "", link: "", newTab: false }) },
+      });
+    }
+
     const redirectUrl = formData.get("redirectUrl") as string;
     if (redirectUrl) {
       revalidatePath(redirectUrl);
@@ -353,5 +373,120 @@ export async function saveSettings(formData: FormData) {
     return { success: true };
   } catch (error) {
     return { error: "Failed to save settings." };
+  }
+}
+
+/**
+ * Bulk-import Free Panel keys. Trims, dedupes, skips lines already stored.
+ * Never crashes on a bad line — invalid entries are counted and skipped.
+ */
+export async function importFreePanelKeys(formData: FormData): Promise<void> {
+  try {
+    const raw = (formData.get("keys") as string | null) ?? "";
+    const batchNotes = (formData.get("notes") as string | null)?.trim() || null;
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+    // Dedupe within the paste itself
+    const seen = new Set<string>();
+    const candidates: string[] = [];
+    let duplicatesInPaste = 0;
+    for (const line of lines) {
+      if (seen.has(line)) { duplicatesInPaste++; continue; }
+      seen.add(line);
+      // Sensible length validation: 4–64 chars
+      if (line.length < 4 || line.length > 64) continue;
+      candidates.push(line);
+    }
+
+    // Skip keys already in DB
+    const existing = await prisma.freePanelKey.findMany({
+      where: { keyValue: { in: candidates } },
+      select: { keyValue: true },
+    });
+    const existingSet = new Set(existing.map((e) => e.keyValue));
+    const toInsert = candidates.filter((k) => !existingSet.has(k));
+    const dbDuplicates = candidates.length - toInsert.length;
+
+    if (toInsert.length > 0) {
+      const batchId = randomBytes(6).toString("hex");
+      await prisma.freePanelKey.createMany({
+        data: toInsert.map((keyValue) => ({ keyValue, batchId, notes: batchNotes })),
+        skipDuplicates: true,
+      });
+    }
+
+    const skipped = duplicatesInPaste + dbDuplicates;
+    const result = { submitted: lines.length, imported: toInsert.length, skipped };
+    // Surface result via redirect query param
+    const { redirect } = await import("next/navigation");
+    revalidatePath("/mkpanelzoneadmin/free-panel");
+    redirect(`/mkpanelzoneadmin/free-panel?imported=${result.imported}&skipped=${result.skipped}&submitted=${result.submitted}`);
+  } catch (error) {
+    console.error("importFreePanelKeys failed:", error);
+    const { redirect } = await import("next/navigation");
+    redirect("/mkpanelzoneadmin/free-panel?error=import");
+  }
+}
+
+/** Disable or re-enable selected keys (owner action from inventory list). */
+export async function setFreePanelKeyStatus(formData: FormData): Promise<void> {
+  try {
+    const keyId = formData.get("keyId") as string | null;
+    const status = formData.get("status") as string | null;
+    if (!keyId || !status || !["AVAILABLE", "DISABLED"].includes(status)) return;
+    // Only AVAILABLE keys can be toggled — never touch ASSIGNED history.
+    await prisma.freePanelKey.updateMany({
+      where: { id: keyId, status: { in: ["AVAILABLE", "DISABLED"] } },
+      data: { status },
+    });
+    revalidatePath("/mkpanelzoneadmin/free-panel");
+  } catch (error) {
+    console.error("setFreePanelKeyStatus failed:", error);
+  }
+}
+
+/**
+ * Save MK FREE PC PANEL promotion config (single JSON SiteSetting row).
+ * All owner URLs are sanitized server-side: only https:// (or internal relative) survive.
+ */
+export async function saveFreePanelConfig(formData: FormData): Promise<void> {
+  try {
+    const str = (k: string) => (formData.get(k) as string | null)?.trim() ?? "";
+    const num = (k: string, fallback: number, min: number, max: number) => {
+      const n = Number(str(k));
+      return Number.isFinite(n) ? Math.min(Math.max(n, min), max) : fallback;
+    };
+
+    const freqRaw = str("popupFrequency");
+    const value = {
+      enabled: str("enabled") === "true",
+      title: str("title") || "MK FREE PC PANEL",
+      subtitle: str("subtitle") || "5 DAYS FREE ACCESS",
+      durationLabel: str("durationLabel"),
+      ctaLabel: str("ctaLabel") || "GET FREE ACCESS",
+      whatsappUrl: sanitizeUrl(str("whatsappUrl")),
+      youtubeUrl: sanitizeUrl(str("youtubeUrl")),
+      discordUrl: sanitizeUrl(str("discordUrl")),
+      downloadUrl: sanitizeUrl(str("downloadUrl")),
+      downloadLabel: str("downloadLabel") || "Windows Download",
+      setupInstructions: formData.get("setupInstructions")?.toString() ?? "",
+      popupDelaySeconds: num("popupDelaySeconds", 4, 0, 60),
+      popupFrequency: ["ONCE_PER_SESSION", "EVERY_VISIT", "ONCE_PER_VISITOR"].includes(freqRaw)
+        ? freqRaw
+        : "ONCE_PER_SESSION",
+      startDate: str("startDate") || null,
+      endDate: str("endDate") || null,
+    };
+
+    await prisma.siteSetting.upsert({
+      where: { key: FREE_PANEL_SETTING_KEY },
+      update: { value: JSON.stringify(value) },
+      create: { key: FREE_PANEL_SETTING_KEY, value: JSON.stringify(value) },
+    });
+
+    revalidatePath("/mkpanelzoneadmin/free-panel");
+    revalidatePath("/");
+  } catch (error) {
+    console.error("saveFreePanelConfig failed:", error);
   }
 }

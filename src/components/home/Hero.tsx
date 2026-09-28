@@ -1,10 +1,15 @@
-"use client";
-
-import { ShieldCheck, Zap } from "lucide-react";
+import Link from "next/link";
 import { HeroProductSlider } from "@/components/home/HeroProductSlider";
 import type { Product } from "@/components/ui/ProductCard";
+import { getHeroCta } from "@/lib/freePanel";
 
-export function Hero({ products }: { products: Product[] }) {
+/**
+ * Hero — server component so the Owner-configured Top CTA reads directly
+ * from the database with zero client fetch. The slider below stays client.
+ */
+export async function Hero({ products }: { products: Product[] }) {
+  const cta = await getHeroCta();
+
   return (
     <section className="relative hero-bg overflow-x-hidden pt-[80px] sm:pt-[96px] pb-6 sm:pb-10">
       {/* Top edge accent */}
@@ -12,16 +17,51 @@ export function Hero({ products }: { products: Product[] }) {
 
       <div className="relative z-10 w-full max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-2 text-center">
 
-        {/* Premium badge */}
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 mb-4 rounded-full border border-brand-blue-500/25 animate-subtle-float"
-          style={{ background: "var(--surface-glass)" }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-neon-blue animate-dot-pulse flex-shrink-0" />
-          <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.18em] text-brand-neon-blue uppercase whitespace-nowrap">
-            Premium Digital Platform
-          </span>
-        </div>
+        {/* Owner-configurable compact CTA chip — falls back to the static
+            badge when disabled, so the layout never leaves a blank gap. */}
+        {cta.enabled ? (
+          <Link
+            href={cta.link}
+            {...(cta.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            className="hero-cta group inline-flex items-center gap-2 pl-2.5 pr-2 h-[34px] mb-4 rounded-full border border-brand-blue-500/35 active:scale-[0.97] transition-transform duration-150 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(30,63,168,0.20), rgba(47,95,208,0.10))",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 14px rgba(47,95,208,0.14)",
+            }}
+          >
+            <span
+              className="w-[6px] h-[6px] rounded-full shrink-0"
+              style={{ background: "#4DA3FF", boxShadow: "0 0 7px rgba(77,163,255,0.85)" }}
+            />
+            <span className="text-[10px] sm:text-[11px] font-extrabold tracking-[0.16em] text-brand-neon-blue uppercase whitespace-nowrap">
+              {cta.text}
+            </span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              className="text-brand-neon-blue/80 transition-transform duration-200 group-hover:translate-x-0.5"
+              aria-hidden
+            >
+              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+        ) : (
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 mb-4 rounded-full border border-brand-blue-500/25 animate-subtle-float"
+            style={{ background: "var(--surface-glass)" }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-neon-blue animate-dot-pulse flex-shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.18em] text-brand-neon-blue uppercase whitespace-nowrap">
+              Premium Digital Platform
+            </span>
+          </div>
+        )}
 
         {/* H1 — clamp() so it never overflows 320px */}
         <h1
@@ -47,7 +87,7 @@ export function Hero({ products }: { products: Product[] }) {
           Premium digital products, trusted access and everything you need in one place.
         </p>
       </div>
-      
+
       {/* Product Slider replacing old chips */}
       <HeroProductSlider products={products} />
     </section>

@@ -5,8 +5,9 @@ import Image from "next/image";
 import { ArrowRight, Shield, Crown, Calendar, Clock, Package, Headset } from "lucide-react";
 import { productContent } from "@/lib/productContent";
 import type { Product } from "@/components/ui/ProductCard";
+import { Reveal } from "@/components/ui/Reveal";
 
-function getMeta(slug: string, index: number) {
+function getMeta(slug: string) {
   let badge = "";
   if (slug.includes("lifetime")) badge = "BEST SELLER";
   else if (slug.includes("3-months")) badge = "BEST VALUE";
@@ -24,14 +25,14 @@ function getMeta(slug: string, index: number) {
 }
 
 export function CompactProductCard({ product, index }: { product: Product; index: number }) {
-  const { badge, Icon } = getMeta(product.slug, index);
+  const { badge, Icon } = getMeta(product.slug);
   const content = productContent[product.slug];
   const coverImage = product.coverImageUrl || content?.image;
 
   return (
     <Link
       href={`/products/${product.slug}`}
-      className="group flex flex-col rounded-[18px] border bg-surface-glass transition-all duration-300 hover:-translate-y-[3px] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:border-[color:var(--border-subtle-hover)] active:scale-[0.98] overflow-hidden card-entrance"
+      className="group flex flex-col rounded-[18px] border bg-surface-glass transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-[3px] hover:shadow-[var(--shadow-card)] hover:border-[color:var(--border-subtle-hover)] active:scale-[0.98] overflow-hidden card-entrance tap-flat"
       style={{
         borderColor: "var(--border-subtle)",
         animationDelay: `${index * 50}ms`
@@ -87,14 +88,14 @@ export function CompactProductCard({ product, index }: { product: Product; index
           </div>
 
           <div 
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold tracking-[0.05em] uppercase text-white transition-all group-hover:scale-[1.02]"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold tracking-[0.05em] uppercase text-white transition-transform duration-300 group-hover:scale-[1.03]"
             style={{
               background: "linear-gradient(135deg,#1E3FA8,#2F5FD0)",
               boxShadow: "0 2px 8px rgba(47,95,208,0.25)"
             }}
           >
             VIEW
-            <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight size={12} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </div>
         </div>
       </div>
@@ -109,26 +110,24 @@ export function MainProductsSection({ products }: { products: Product[] }) {
     <section className="py-12 sm:py-16 relative bg-background border-t border-border-subtle">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         
-        <div className="text-center mb-10 sm:mb-12">
+        <Reveal className="text-center mb-10 sm:mb-12">
           <h2 className="text-[20px] sm:text-[24px] font-extrabold text-foreground tracking-widest uppercase mb-2">
             Explore Products
           </h2>
           <p className="text-[12px] sm:text-[14px] text-brand-ink-3 font-medium">
             Choose the product that fits your setup.
           </p>
-        </div>
+        </Reveal>
 
-        {/* 
-          Grid layout: 
-          - Mobile (xs): 1 column (if too narrow) or 2 columns if space permits.
-          - Mobile (sm, >380px): 2 columns.
-          - Desktop (md+): 3 columns.
-          Uses grid-cols-2 as base, but drops to 1 on extremely small screens (e.g., 320px) 
-          if minmax kicks in, but tailwind grid-cols-2 is simpler and we can use a custom class or clamp.
+        {/*
+          Grid: 1 col on the narrowest phones, 2 from 380px, 3 from md.
+          Each card carries its own scroll reveal so the grid cascades in.
         */}
         <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
           {products.map((product, idx) => (
-            <CompactProductCard key={product.id} product={product} index={idx} />
+            <Reveal key={product.id} delay={Math.min(idx, 5) * 60}>
+              <CompactProductCard product={product} index={idx} />
+            </Reveal>
           ))}
         </div>
 

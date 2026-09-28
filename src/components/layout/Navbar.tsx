@@ -6,6 +6,7 @@ import { Menu, X, ShieldAlert, Home, Package, MessageCircle } from "lucide-react
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { useFreePanel } from "@/components/freepanel/FreePanelProvider";
 
 const navLinks = [
   { href: "/",         label: "Home",    Icon: Home },
@@ -18,6 +19,7 @@ export function Navbar({ isLoggedIn }: { isLoggedIn?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
+  const { openFreePanel, available: freePanelAvailable } = useFreePanel();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -66,18 +68,18 @@ export function Navbar({ isLoggedIn }: { isLoggedIn?: boolean }) {
           */}
           <Link
             href="/"
-            className="flex items-center gap-1.5 flex-shrink-0 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-lg px-1 py-0.5"
+            className="brand-loop flex items-baseline gap-1.5 flex-shrink-0 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-lg px-1 pb-1 pt-0.5"
             aria-label="MK Panel Zone — Home"
           >
             <span
-              className="font-extrabold tracking-[0.07em] neon-text-blue"
+              className="font-black tracking-[0.06em] neon-text-blue"
               style={{ fontSize: "clamp(13px,4vw,16px)" }}
             >
               MK
             </span>
             <span
-              className="font-medium tracking-[0.04em] text-foreground"
-              style={{ fontSize: "clamp(12px,3.6vw,15px)" }}
+              className="font-semibold tracking-[0.14em] text-foreground/95"
+              style={{ fontSize: "clamp(11px,3.4vw,14px)" }}
             >
               PANEL ZONE
             </span>
@@ -130,11 +132,33 @@ export function Navbar({ isLoggedIn }: { isLoggedIn?: boolean }) {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <ThemeToggle />
 
+            {/* FREE PANEL — compact premium CTA; label from ≥390px, icon-only below */}
+            {freePanelAvailable && (
+              <button
+                onClick={openFreePanel}
+                aria-label="Claim free PC panel — 5 days free access"
+                className="hidden sm:flex h-[42px] items-center gap-1.5 rounded-[12px] px-2.5 min-[390px]:px-3 border active:scale-[0.96] transition-[background-color,border-color,transform] duration-200 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2"
+                style={{
+                  background: "linear-gradient(135deg,rgba(30,63,168,0.22),rgba(47,95,208,0.16))",
+                  borderColor: "rgba(77,163,255,0.35)",
+                  boxShadow: "0 0 0 1px rgba(77,163,255,0.06), inset 0 1px 0 rgba(255,255,255,0.08)",
+                }}
+              >
+                <span
+                  className="w-[6px] h-[6px] rounded-full shrink-0"
+                  style={{ background: "#4DA3FF", boxShadow: "0 0 6px rgba(77,163,255,0.8)" }}
+                />
+                <span className="hidden min-[390px]:block text-[10.5px] font-extrabold tracking-[0.1em] uppercase text-brand-neon-blue whitespace-nowrap">
+                  FREE PANEL
+                </span>
+              </button>
+            )}
+
             {/* Access button — icon always, label on ≥360px */}
             <Link
               href={isLoggedIn ? "/dashboard" : "/access"}
               aria-label={isLoggedIn ? "My Panel" : "Customer Access"}
-              className="h-[42px] flex items-center rounded-[12px] px-2 sm:px-3 border transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 active:scale-[0.96] transition-transform duration-100"
+              className="relative h-[42px] flex items-center rounded-[12px] px-2 sm:px-3 border transition-[background-color,border-color,transform] duration-200 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 active:scale-[0.96]"
               style={{
                 background: "rgba(47,95,208,0.12)",
                 borderColor: "rgba(77,163,255,0.28)",
@@ -241,6 +265,33 @@ export function Navbar({ isLoggedIn }: { isLoggedIn?: boolean }) {
               })}
 
               <div className="h-px mx-2 my-1" style={{ background: "var(--border-subtle)" }} />
+
+              {/* Free Panel CTA */}
+              {freePanelAvailable && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.16, duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <button
+                    onClick={() => {
+                      setIsOpen(false);
+                      openFreePanel();
+                    }}
+                    className="w-full h-[52px] flex items-center gap-3 px-4 rounded-[14px] font-extrabold tracking-[0.06em] uppercase text-brand-neon-blue text-[14px] active:scale-[0.975] transition-transform duration-100 border"
+                    style={{
+                      background: "rgba(47,95,208,0.12)",
+                      borderColor: "rgba(77,163,255,0.30)",
+                    }}
+                  >
+                    <span
+                      className="w-[7px] h-[7px] rounded-full shrink-0"
+                      style={{ background: "#4DA3FF", boxShadow: "0 0 8px rgba(77,163,255,0.8)" }}
+                    />
+                    <span>FREE PANEL — 5 DAYS</span>
+                  </button>
+                </motion.div>
+              )}
 
               {/* Customer Access CTA */}
               <motion.div

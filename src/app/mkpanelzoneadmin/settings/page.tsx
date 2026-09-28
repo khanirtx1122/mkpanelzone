@@ -1,5 +1,6 @@
 import { getSettings } from "@/lib/settings";
-import { Save, Settings2 } from "lucide-react";
+import { getHeroCta } from "@/lib/freePanel";
+import { Save, Settings2, Sparkles } from "lucide-react";
 import { saveSettings } from "../actions";
 
 export default async function GeneralSettingsPage() {
@@ -10,6 +11,7 @@ export default async function GeneralSettingsPage() {
     "site_keywords",
     "maintenance_mode",
   ]);
+  const heroCta = await getHeroCta();
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -80,6 +82,59 @@ export default async function GeneralSettingsPage() {
                   placeholder="fivem, scripts, esx, qbcore"
                   className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors" 
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* ── HERO TOP CTA ── */}
+          <div className="space-y-5">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-2">
+              <Sparkles className="text-brand-blue-400" size={18} /> Hero Top CTA
+            </h2>
+            <p className="text-xs text-brand-ink-3 font-mono">
+              The compact chip above the homepage headline. Disabled = static "Premium Digital Platform" badge.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">CTA Text</label>
+                <input
+                  type="text"
+                  name="hero_cta_text"
+                  defaultValue={heroCta.text}
+                  placeholder="FREE PANEL"
+                  maxLength={40}
+                  className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">CTA Link</label>
+                <input
+                  type="text"
+                  name="hero_cta_link"
+                  defaultValue={heroCta.link}
+                  placeholder="/products or https://..."
+                  className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-6 md:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-white font-bold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="hero_cta_enabled"
+                    defaultChecked={heroCta.enabled}
+                    className="w-4 h-4 accent-brand-blue-500 bg-black/50 border-white/10"
+                  />
+                  Enabled
+                </label>
+                <label className="flex items-center gap-2 text-sm text-white font-bold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="hero_cta_new_tab"
+                    defaultChecked={heroCta.newTab}
+                    className="w-4 h-4 accent-brand-blue-500 bg-black/50 border-white/10"
+                  />
+                  Open in new tab
+                </label>
               </div>
             </div>
           </div>

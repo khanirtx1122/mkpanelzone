@@ -97,6 +97,27 @@
 }
 
 /* ================================================================
+   DARK THEME ATMOSPHERE — restrained static blue-graphics lighting on
+   the page canvas so dark mode feels alive, not near-black flat.
+   Purely decorative layer behind content; zero animation cost.
+   ================================================================ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 40% at 18% 0%, rgba(47, 95, 208, 0.085) 0%, transparent 62%),
+    radial-gradient(ellipse 45% 35% at 88% 30%, rgba(30, 63, 168, 0.06) 0%, transparent 60%);
+}
+[data-theme="light"] body::before {
+  background:
+    radial-gradient(ellipse 55% 40% at 18% 0%, rgba(47, 95, 208, 0.055) 0%, transparent 62%);
+}
+html[data-perf="low"] body::before { display: none; }
+
+/* ================================================================
    LIGHT THEME — designed independently, not dark-inverted
    ================================================================ */
 [data-theme="light"] {
@@ -232,29 +253,6 @@ label, .label { line-height: 1.2; }
 }
 
 /* ================================================================
-   ENTRANCE ANIMATIONS — transform/opacity only (no layout props)
-   card-entrance: used on ProductCard, DashboardCard etc.
-   ================================================================ */
-@keyframes card-entrance-kf {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.card-entrance {
-  animation: card-entrance-kf 0.5s var(--ease-obsidian, cubic-bezier(0.16,1,0.3,1)) both;
-}
-
-/* Prevent re-play after the card has been marked as animated */
-.card-entrance[data-animated="true"] {
-  animation: none;
-}
-
-/* Disable entrance animation on low-perf mode */
-html[data-perf="low"] .card-entrance {
-  animation: none;
-}
-
-/* ================================================================
    STATUS BADGE UTILITIES — theme-aware
    ================================================================ */
 .badge-success {
@@ -366,115 +364,9 @@ html[data-perf="low"] .page-fadein {
   transform: none !important;
 }
 
-html[data-intro="off"] #mk-intro { display: none !important; }
-
-/* ================================================================
-   INTRO ANIMATIONS — Custom 3.5s Premium Sequence
-   ================================================================ */
-.intro-container {
-  animation: intro-bg-fade 3.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-bg-fade {
-  0%, 75% { opacity: 1; pointer-events: auto; }
-  100% { opacity: 0; pointer-events: none; visibility: hidden; }
-}
-
-.intro-core-container {
-  animation: intro-core-transform 3.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-core-transform {
-  0%, 75% { transform: scale(1) translateY(0); }
-  100% { transform: scale(0.95) translateY(-20px); opacity: 0; }
-}
-
-/* Stage 1: Signal */
-.intro-signal-line {
-  animation: intro-signal-anim 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
-  width: 0px;
-}
-@keyframes intro-signal-anim {
-  0% { opacity: 0; width: 0px; }
-  5% { opacity: 1; width: 20px; }
-  30% { opacity: 1; width: 140px; }
-  50% { opacity: 0; width: 200px; }
-  100% { opacity: 0; width: 200px; }
-}
-
-/* Stage 2: Technical Structure */
-.intro-corner {
-  opacity: 0;
-  animation: intro-corner-anim 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes intro-corner-anim {
-  0%, 12% { opacity: 0; transform: scale(0.5); }
-  25%, 75% { opacity: 1; transform: scale(1); }
-  85%, 100% { opacity: 0; transform: scale(1.2); }
-}
-.intro-marker {
-  opacity: 0;
-  animation: intro-marker-anim 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes intro-marker-anim {
-  0%, 15% { opacity: 0; transform: translateY(10px) translateX(-50%); }
-  25%, 75% { opacity: 1; transform: translateY(0) translateX(-50%); }
-  85%, 100% { opacity: 0; transform: translateY(-10px) translateX(-50%); }
-}
-
-/* Stage 3: Wordmark */
-.intro-wordmark {
-  opacity: 0;
-  animation: intro-wordmark-anim 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-wordmark-anim {
-  0%, 27% { opacity: 0; transform: translateY(15px); filter: blur(4px); letter-spacing: -2px; }
-  55%, 100% { opacity: 1; transform: translateY(0); filter: blur(0px); letter-spacing: 0px; }
-}
-.intro-wordmark-wrapper {
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-}
-
-.intro-crimson-accent {
-  opacity: 0;
-  animation: intro-crimson-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-crimson-anim {
-  0%, 35% { opacity: 0; width: 0px; }
-  50%, 75% { opacity: 1; width: 16px; }
-  85%, 100% { opacity: 0; width: 32px; }
-}
-
-/* Stage 4: Light Pass */
-.intro-light-pass {
-  opacity: 0;
-  transform: translateX(-150%) skewX(-15deg);
-  animation: intro-light-pass-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-light-pass-anim {
-  0%, 50% { opacity: 0; transform: translateX(-150%) skewX(-15deg); }
-  55% { opacity: 1; }
-  68% { opacity: 1; transform: translateX(150%) skewX(-15deg); }
-  100% { opacity: 0; transform: translateX(150%) skewX(-15deg); }
-}
-
-/* Stage 5: Descriptor */
-.intro-descriptor {
-  opacity: 0;
-  animation: intro-descriptor-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-descriptor-anim {
-  0%, 58% { opacity: 0; transform: translateY(8px); filter: blur(2px); }
-  75%, 100% { opacity: 1; transform: translateY(0); filter: blur(0px); }
-}
-
-.intro-status {
-  opacity: 0;
-  animation: intro-status-anim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes intro-status-anim {
-  0%, 65% { opacity: 0; transform: translateY(4px); }
-  80%, 100% { opacity: 1; transform: translateY(0); }
-}
+/* Hide the SSR-rendered intro before hydration when it should not play.
+   Inert once the sequence is armed, so a late tier change can never cut it off. */
+html[data-intro="off"]:not([data-intro-run="1"]) #mk-intro { display: none !important; }
 
 /* ================================================================
    NEON UTILITIES — power-on & sheen only (breathe REMOVED per 6.5)
@@ -591,57 +483,6 @@ html[data-perf="low"] .animate-neon-sheen {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-}
-
-/* Neon Animations */
-@keyframes neon-flicker-anim {
-  0% { opacity: 0; }
-  10% { opacity: 1; }
-  25% { opacity: 0.25; }
-  40% { opacity: 1; }
-  60% { opacity: 0.5; }
-  100% { opacity: 1; }
-}
-
-@keyframes neon-breathe-anim {
-  0%, 100% { opacity: 0.75; }
-  50% { opacity: 1; }
-}
-
-@keyframes neon-sheen-anim {
-  0% { transform: translateX(-150%) skewX(-15deg); opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { transform: translateX(150%) skewX(-15deg); opacity: 0; }
-}
-
-.animate-neon-power-on {
-  animation: neon-flicker-anim 900ms ease-in forwards;
-}
-
-.animate-neon-breathe {
-  animation: neon-breathe-anim 5s ease-in-out infinite;
-}
-
-.animate-neon-sheen {
-  animation: neon-sheen-anim 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-/* Pause animations when low perf or reduced motion */
-html[data-perf="low"] .animate-neon-power-on,
-html[data-perf="low"] .animate-neon-breathe,
-html[data-perf="low"] .animate-neon-sheen {
-  animation: none !important;
-  opacity: 1 !important;
-}
-
-@media (prefers-reduced-motion) {
-  .animate-neon-power-on,
-  .animate-neon-breathe,
-  .animate-neon-sheen {
-    animation: none !important;
-    opacity: 1 !important;
   }
 }
 
@@ -782,14 +623,207 @@ html[data-perf="low"] .animate-dot-pulse { animation: none; }
 /* ================================================================
    PRESS FEEDBACK — 98% scale on tap (mobile-first)
    ================================================================ */
+.press-98 {
+  transition: transform var(--duration-press) var(--ease-obsidian);
+}
 .press-98:active { transform: scale(0.98); }
+
+/* ================================================================
+   TOUCH FEEDBACK — removes the 300ms tap flash on mobile Safari/
+   Chrome and gives an instant, controlled press state instead.
+   ================================================================ */
+.tap-flat {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ================================================================
+   MOTION SAFETY NET — never leave revealed content invisible if the
+   observer never fires (no JS, print, background tab restore).
+   ================================================================ */
+@media print {
+  [data-reveal] { opacity: 1 !important; transform: none !important; }
+}
+
+/* Note: the reveal failsafe is implemented in JS (Reveal.tsx) with a one-shot
+   timer, NOT as a global CSS animation — a page-wide pending animation delays
+   compositor work and can stall unrelated transitions on weak devices. */
+
   
-/* Hero Slider Track */  
-.hero-slider-track {  
-  --card-width: 100%;  
-  transform: translateX(calc( (100% - var(--card-width)) / 2 - (var(--current-index) * var(--card-width)) + var(--drag-offset) ));  
-  transition: var(--slider-transition);  
-}  
-@media (min-width: 640px) { .hero-slider-track { --card-width: 85%; } }  
-@media (min-width: 768px) { .hero-slider-track { --card-width: 60%; } }  
-@media (min-width: 1024px) { .hero-slider-track { --card-width: 45%; } }
+/* ================================================================
+   HERO TOP CTA — periodic single edge-glint (not a constant pulse).
+   Transform/opacity only; disabled for reduced motion / low perf.
+   ================================================================ */
+.hero-cta { position: relative; overflow: hidden; isolation: isolate; }
+.hero-cta::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, rgba(77, 163, 255, 0.28) 50%, transparent);
+  transform: translateX(-140%) skewX(-12deg);
+  opacity: 0;
+  pointer-events: none;
+  animation: hero-cta-glint 5.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@keyframes hero-cta-glint {
+  0%, 72% { transform: translateX(-140%) skewX(-12deg); opacity: 0; }
+  80%     { opacity: 1; }
+  96%, 100% { transform: translateX(340%) skewX(-12deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-cta::after { animation: none; opacity: 0; }
+}
+html[data-perf="low"] .hero-cta::after { animation: none; opacity: 0; }
+
+/* ================================================================
+   HEADER BRAND LOOP — one thin cobalt glint travels the rail under
+   the MK PANEL ZONE wordmark every ~6s, ending in a tiny crimson
+   reflection. Transform-only; off on reduced motion / low perf.
+   ================================================================ */
+.brand-loop { position: relative; }
+.brand-loop::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: -4px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77, 163, 255, 0.35) 20%, rgba(77, 163, 255, 0.35) 80%, transparent);
+  opacity: 0.4;
+  pointer-events: none;
+}
+.brand-loop::before {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 38%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77, 163, 255, 0.95) 45%, rgba(255, 45, 85, 0.4) 85%, transparent);
+  transform: translateX(-130%);
+  opacity: 0;
+  pointer-events: none;
+  animation: brand-glint 6.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+@keyframes brand-glint {
+  0%, 68% { transform: translateX(-130%); opacity: 0; }
+  74%     { opacity: 1; }
+  90%, 100% { transform: translateX(300%); opacity: 0; }
+}
+[data-theme="light"] .brand-loop::after {
+  background: linear-gradient(90deg, transparent, rgba(47, 95, 208, 0.30) 20%, rgba(47, 95, 208, 0.30) 80%, transparent);
+}
+[data-theme="light"] .brand-loop::before {
+  background: linear-gradient(90deg, transparent, rgba(47, 95, 208, 0.85) 45%, rgba(179, 18, 47, 0.35) 85%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-loop::before { animation: none; opacity: 0; }
+}
+html[data-perf="low"] .brand-loop::before { animation: none; opacity: 0; }
+
+/* ================================================================
+   SCROLL REVEAL — transform + opacity only, driven by IntersectionObserver
+   (see components/ui/Reveal.tsx). Never a layout property.
+   ================================================================ */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 600ms var(--ease-obsidian),
+    transform 600ms var(--ease-obsidian);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+[data-reveal="in"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ================================================================
+   SURFACE SHEEN — one-shot cobalt/white light sweep on hover
+   transform-only, hover-capable pointers only, off on low-perf
+   ================================================================ */
+.sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.16) 50%,
+    transparent 100%
+  );
+  transform: translateX(-220%) skewX(-14deg);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sheen:hover::after {
+    animation: sheen-sweep 720ms var(--ease-obsidian);
+  }
+}
+@keyframes sheen-sweep {
+  0%   { transform: translateX(-220%) skewX(-14deg); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: translateX(320%) skewX(-14deg); opacity: 0; }
+}
+html[data-perf="low"] .sheen::after { display: none; }
+
+/* ================================================================
+   HAIRLINE DIVIDER — fades at both ends, no hard edges
+   ================================================================ */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--border-subtle) 15%,
+    var(--border-subtle) 85%,
+    transparent 100%
+  );
+}
+
+/* ================================================================
+   COBALT EDGE — restrained premium edge illumination
+   ================================================================ */
+.edge-cobalt {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(77, 163, 255, 0.16),
+    0 10px 34px rgba(47, 95, 208, 0.16);
+}
+[data-theme="light"] .edge-cobalt {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(47, 95, 208, 0.14),
+    0 10px 28px rgba(47, 95, 208, 0.10);
+}
+
+/* ================================================================
+   REVEAL / SHEEN FALLBACKS — always visible when motion is reduced
+   ================================================================ */
+html[data-perf="low"] [data-reveal] {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .sheen::after { display: none; }
+}

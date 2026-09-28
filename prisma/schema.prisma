@@ -159,3 +159,42 @@ model Popup {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
+
+/// Owner-configured promotion: MK FREE PC PANEL (5-day trial claim system).
+/// Stored as a single SiteSetting KV row (JSON) — no schema changes needed for copy tweaks.
+/// FreeClaim rows track individual visitor claims; keys are issued server-side only.
+model FreeClaim {
+  id            String    @id @default(uuid())
+  /// Random opaque token identifying this claim in the visitor's session.
+  claimToken    String    @unique
+  /// Server-generated access key (plaintext, same storage pattern as PackageResource.secret)
+  key           String    @unique
+  platform      String    @default("PC")
+  durationDays  Int       @default(5)
+  /// Steps completed at claim time, e.g. "whatsapp,youtube,discord"
+  stepsDone     String    @default("")
+  status        String    @default("ACTIVE")
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  panelKey      FreePanelKey?
+}
+
+/// Owner-imported Free Panel key inventory. Assignment is atomic via a
+/// transactional updateMany on an AVAILABLE row — two concurrent claims can
+/// never receive the same key.
+model FreePanelKey {
+  id          String    @id @default(uuid())
+  keyValue    String    @unique
+  status      String    @default("AVAILABLE") // AVAILABLE | ASSIGNED | DISABLED
+  batchId     String?
+  notes       String?
+  claimId     String?   @unique
+  assignedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  claim       FreeClaim? @relation(fields: [claimId], references: [id])
+
+  @@index([status])
+  @@index([claimId])
+}

@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { prisma } from "@/lib/prisma";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { GlobalPopupProvider } from "@/components/providers/GlobalPopupProvider";
+import { FreePanelProvider } from "@/components/freepanel/FreePanelProvider";
 import Script from "next/script";
 const manrope = Manrope({
   subsets: ["latin"],
@@ -117,7 +118,7 @@ export default async function RootLayout({
                     isSlow = true;
                   }
 
-                  if (force === "skip" || (!force && (hasSeen || !isHome || prm))) {
+                  if (force === "skip" || (!force && (hasSeen || !isHome))) {
                     document.documentElement.setAttribute("data-intro", "off");
                     if (isSlow) document.documentElement.setAttribute("data-perf", "low");
                     return;
@@ -126,6 +127,16 @@ export default async function RootLayout({
                   var tier = isSlow ? "lite" : "full";
                   if (force === "lite") tier = "lite";
                   if (force === "full") tier = "full";
+                  if (force === "reduced") tier = "reduced";
+                  // prefers-reduced-motion still gets a real (short) sequence:
+                  // signal -> masked wordmark reveal -> split shutter. Never a fade.
+                  if (prm && !force) tier = "reduced";
+
+                  if (tier === "reduced") {
+                    document.documentElement.setAttribute("data-intro", "reduced");
+                    if (isSlow) document.documentElement.setAttribute("data-perf", "low");
+                    return;
+                  }
 
                   if (tier === "lite") {
                     document.documentElement.setAttribute("data-intro", "lite");
@@ -133,14 +144,20 @@ export default async function RootLayout({
                     return;
                   }
 
-                  // Start as full, but probe
+                  // Start as full, but probe the opening frames.
                   document.documentElement.setAttribute("data-intro", "full");
-                  
+
+                  // An explicit ?intro= override always wins — no probing.
+                  if (force) return;
+
                   var frames = 0;
                   var totalTime = 0;
                   var lastTime = 0;
-                  
+
                   function probe(time) {
+                    // Once React has armed the sequence, leave it alone: a late
+                    // downgrade would cut the animation off mid-flight.
+                    if (document.documentElement.getAttribute("data-intro-run") === "1") return;
                     if (lastTime === 0) {
                       lastTime = time;
                       requestAnimationFrame(probe);
@@ -150,21 +167,18 @@ export default async function RootLayout({
                     lastTime = time;
                     totalTime += delta;
                     frames++;
-                    
-                    if (delta > 200) {
-                      document.documentElement.setAttribute("data-intro", "off");
-                      document.documentElement.setAttribute("data-perf", "low");
-                      return;
-                    }
-                    
+
                     if (frames < 12) {
                       requestAnimationFrame(probe);
-                    } else {
-                      var avg = totalTime / frames;
-                      if (avg > 22) {
-                        document.documentElement.setAttribute("data-intro", "lite");
-                        document.documentElement.setAttribute("data-perf", "low");
-                      }
+                      return;
+                    }
+
+                    // Sustained slowness only — a single long frame (GC, a lazy
+                    // chunk, dev tooling) must never cancel the brand sequence.
+                    var avg = totalTime / frames;
+                    if (avg > 26) {
+                      document.documentElement.setAttribute("data-intro", "lite");
+                      document.documentElement.setAttribute("data-perf", "low");
                     }
                   }
                   requestAnimationFrame(probe);
@@ -186,11 +200,13 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <AnnouncementBar announcement={activeAnnouncement} />
-          <Navbar isLoggedIn={hasSession} />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
+          <FreePanelProvider>
+            <Navbar isLoggedIn={hasSession} />
+            <main className="flex-1">
+              {children}
+            </main>
+            <Footer />
+          </FreePanelProvider>
           <GlobalPopupProvider popups={activePopups} />
         </ThemeProvider>
       </body>

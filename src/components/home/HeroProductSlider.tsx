@@ -1,19 +1,35 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Shield, Crown, Calendar, Clock, Package, Headset, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowRight,
+  Shield,
+  Crown,
+  Calendar,
+  Clock,
+  Package,
+  Headset,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { productContent } from "@/lib/productContent";
 import type { Product } from "@/components/ui/ProductCard";
+import styles from "./HeroProductSlider.module.css";
+
+const COPIES = 3;
+const AUTOPLAY_MS = 2800;
+const RESUME_AFTER_INTERACTION_MS = 3800;
+const DRAG_COMMIT_PX = 42;
 
 function getMeta(slug: string) {
   let badge = "PREMIUM";
-  let colorTheme = "blue"; // default
+  let isCrimson = false;
 
   if (slug.includes("lifetime")) {
     badge = "BEST SELLER";
-    colorTheme = "crimson";
+    isCrimson = true;
   } else if (slug.includes("3-months")) {
     badge = "BEST VALUE";
   } else if (slug.includes("weekly")) {
@@ -21,328 +37,358 @@ function getMeta(slug: string) {
   } else if (slug.includes("setup") || slug.includes("support")) {
     badge = "ADD-ON";
   }
-  
+
   let Icon = Shield;
   if (slug.includes("3-months")) Icon = Crown;
   else if (slug.includes("monthly")) Icon = Calendar;
   else if (slug.includes("weekly")) Icon = Clock;
   else if (slug.includes("setup")) Icon = Package;
   else if (slug.includes("support")) Icon = Headset;
-  
-  return { badge, Icon, colorTheme };
+
+  return { badge, Icon, isCrimson };
 }
 
 export function HeroProductSlider({ products }: { products: Product[] }) {
-  const baseProducts = products.length > 0 ? products.slice(0, 5) : [];
-  
-  // Triplicate the array for seamless infinite looping
-  const displayProducts = baseProducts.length > 0 
-    ? [...baseProducts, ...baseProducts, ...baseProducts, ...baseProducts, ...baseProducts] 
-    : [];
+  const baseProducts = useMemo(() => (products.length > 0 ? products.slice(0, 5) : []), [products]);
+  const count = baseProducts.length;
 
-  const startIndex = baseProducts.length * 2;
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const [isTransitioning, setIsTransitioning] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
-  const pauseTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Three identical sets. Index starts in the middle set and rewinds by one set
+  // whenever it leaves it — visually identical frame, so the loop never jumps.
+  const slides = useMemo(
+    () => (count > 0 ? Array.from({ length: COPIES }, () => baseProducts).flat() : []),
+    [baseProducts, count]
+  );
 
-  const [touchStart, setTouchStart] = useState(0);
-  const [touchEnd, setTouchEnd] = useState(0);
+  const [index, setIndex] = useState(count);
+  const [animating, setAnimating] = useState(true);
+  const [userPaused, setUserPaused] = useState(false);
 
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(0);
-  const [dragOffset, setDragOffset] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const resumeTimer = useRef<number | null>(null);
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragDx = useRef(0);
+  const axisLocked = useRef<"x" | "y" | null>(null);
+  /** Set when a gesture actually dragged, so the trailing click is swallowed. */
+  const suppressClick = useRef(false);
+
+  const writeDragOffset = useCallback((px: number) => {
+    trackRef.current?.style.setProperty("--drag", `${px}px`);
+  }, []);
+
+  const pauseForInteraction = useCallback(() => {
+    setUserPaused(true);
+    if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
+    resumeTimer.current = window.setTimeout(
+      () => setUserPaused(false),
+      RESUME_AFTER_INTERACTION_MS
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
+    },
+    []
+  );
+
+  const goTo = useCallback((next: number, animate = true) => {
+    setAnimating(animate);
+    setIndex(next);
+  }, []);
+
+  const step = useCallback(
+    (delta: number) => {
+      setAnimating(true);
+      setIndex((prev) => prev + delta);
+    },
+    []
+  );
+
+  /* ── Autoplay ────────────────────────────────────────────────────────────
+     Paused while the user is interacting, while the tab is hidden, and while
+     the carousel is off screen — three easy wins on low-end devices. */
+  const [inView, setInView] = useState(true);
+  const [tabVisible, setTabVisible] = useState(true);
 
   useEffect(() => {
-    if (isPaused || baseProducts.length === 0 || isDragging) return;
+    const el = viewportRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => setInView(entries.some((e) => e.isIntersecting)),
+      { threshold: 0.2 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-    const interval = setInterval(() => {
-      setIsTransitioning(true);
-      setCurrentIndex((prev) => prev + 1);
-    }, 2500); // 2.5 seconds
+  useEffect(() => {
+    const onVisibility = () => setTabVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [isPaused, baseProducts.length, isDragging]);
+  useEffect(() => {
+    // `animating` is false only while a drag is in flight (or during the one
+    // rewind commit), so it doubles as a clean "hands off" signal.
+    if (count < 2 || userPaused || !inView || !tabVisible || !animating) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  const handleTransitionEnd = () => {
-    if (currentIndex >= baseProducts.length * 4) {
-      setIsTransitioning(false);
-      setCurrentIndex(currentIndex - baseProducts.length);
-    } 
-    else if (currentIndex <= baseProducts.length) {
-      setIsTransitioning(false);
-      setCurrentIndex(currentIndex + baseProducts.length);
+    const id = window.setInterval(() => step(1), AUTOPLAY_MS);
+    return () => window.clearInterval(id);
+  }, [count, userPaused, inView, tabVisible, animating, step]);
+
+  /* ── Rewind ─────────────────────────────────────────────────────────────
+     Runs on the track's *own* transform transition only. Both the index and
+     the "no transition" flag are committed together, so the correction lands
+     in a single style recalculation and is never seen. */
+  const handleTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== trackRef.current || event.propertyName !== "transform") return;
+    if (count < 2) return;
+
+    if (index >= count * 2) {
+      setAnimating(false);
+      setIndex(index - count);
+    } else if (index < count) {
+      setAnimating(false);
+      setIndex(index + count);
     }
   };
 
-  const handleInteraction = () => {
-    setIsPaused(true);
-    if (pauseTimeout.current) clearTimeout(pauseTimeout.current);
-    pauseTimeout.current = setTimeout(() => {
-      setIsPaused(false);
-    }, 4500);
+  /* ── Pointer drag ───────────────────────────────────────────────────────
+     The offset lives in a ref and is written straight to a CSS variable, so a
+     drag never triggers a React render — that is what keeps swiping smooth on
+     cheaper Android phones. */
+  const beginDrag = (x: number) => {
+    dragging.current = true;
+    suppressClick.current = false;
+    dragStartX.current = x;
+    dragDx.current = 0;
+    axisLocked.current = null;
+    setAnimating(false);
+    pauseForInteraction();
   };
 
-  // Touch Swipe (Mobile)
-  const handleTouchStart = (e: React.TouchEvent) => {
-    handleInteraction();
-    setTouchStart(e.targetTouches[0].clientX);
-    setIsTransitioning(false);
-  };
+  const moveDrag = (x: number) => {
+    if (!dragging.current) return;
+    const dx = x - dragStartX.current;
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStart) return;
-    const currentX = e.targetTouches[0].clientX;
-    setTouchEnd(currentX);
-    setDragOffset(currentX - touchStart);
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) {
-      setIsTransitioning(true);
-      setDragOffset(0);
-      return;
+    if (axisLocked.current === null) {
+      // Give vertical scrolling priority on touch: only take over once the
+      // gesture is clearly horizontal. Halve the delta so the finger tracks
+      // the visual's edge naturally.
+      axisLocked.current = Math.abs(dx) > 6 ? "x" : "y";
     }
-    const distance = touchStart - touchEnd;
-    
-    setIsTransitioning(true);
-    if (distance > 40) {
-      setCurrentIndex(prev => prev + 1);
-    } else if (distance < -40) {
-      setCurrentIndex(prev => prev - 1);
+    if (axisLocked.current !== "x") return;
+
+    dragDx.current = dx;
+    writeDragOffset(dx * 0.5);
+  };
+
+  const endDrag = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+
+    const dx = dragDx.current;
+    dragDx.current = 0;
+    suppressClick.current = Math.abs(dx) > 5;
+    writeDragOffset(0);
+    setAnimating(true);
+
+    if (dx <= -DRAG_COMMIT_PX) step(1);
+    else if (dx >= DRAG_COMMIT_PX) step(-1);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => beginDrag(e.touches[0].clientX);
+  const onTouchMove = (e: React.TouchEvent) => moveDrag(e.touches[0].clientX);
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    beginDrag(e.clientX);
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragging.current) return;
+    e.preventDefault();
+    moveDrag(e.clientX);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      pauseForInteraction();
+      step(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      pauseForInteraction();
+      step(-1);
     }
-    
-    setDragOffset(0);
-    setTouchStart(0);
-    setTouchEnd(0);
   };
 
-  // Mouse Drag (Desktop)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    handleInteraction();
-    setIsDragging(true);
-    setIsTransitioning(false);
-    setDragStart(e.clientX);
+  const jumpToDot = (dot: number) => {
+    pauseForInteraction();
+    const modulo = ((index % count) + count) % count;
+    const setBase = index - modulo;
+    goTo(setBase + dot);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    e.preventDefault(); // Prevent text selection
-    setDragOffset(e.clientX - dragStart);
-  };
+  if (slides.length === 0) return null;
 
-  const handleMouseUpOrLeave = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    setIsTransitioning(true);
-    
-    if (dragOffset > 50) {
-      setCurrentIndex(prev => prev - 1);
-    } else if (dragOffset < -50) {
-      setCurrentIndex(prev => prev + 1);
-    }
-    setDragOffset(0);
-  };
-
-  // Arrow Navigation
-  const handleNext = () => {
-    handleInteraction();
-    setIsTransitioning(true);
-    setCurrentIndex(prev => prev + 1);
-  };
-
-  const handlePrev = () => {
-    handleInteraction();
-    setIsTransitioning(true);
-    setCurrentIndex(prev => prev - 1);
-  };
-
-  if (displayProducts.length === 0) return null;
+  const activeDot = count > 0 ? ((index % count) + count) % count : 0;
 
   return (
-    <div 
-      className="w-full max-w-[1024px] mx-auto mt-6 relative overflow-visible pb-4"
-      onMouseEnter={handleInteraction}
+    <div
+      className="w-full max-w-[1080px] mx-auto mt-6 relative pb-2"
+      onMouseEnter={pauseForInteraction}
       onMouseLeave={() => {
-        handleInteraction();
-        handleMouseUpOrLeave();
+        endDrag();
+        pauseForInteraction();
       }}
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Featured products"
     >
-      <style dangerouslySetInnerHTML={{__html: `
-        .hero-slider-track {
-          --item-width: 82vw;
-          --container-width: 100vw;
-          --gap: calc(var(--container-width) - var(--item-width));
-          padding-left: calc((var(--container-width) - var(--item-width)) / 2);
-          transform: translateX(calc(-1 * var(--current-index) * var(--container-width) + var(--drag-offset)));
-          transition: var(--slider-transition);
-          gap: var(--gap);
-        }
-        @media (min-width: 640px) {
-          .hero-slider-track {
-            --item-width: 440px;
-          }
-        }
-        @media (min-width: 1024px) {
-          .hero-slider-track {
-            --item-width: 520px;
-            --container-width: 1024px;
-          }
-        }
-      `}} />
-
-      {/* Desktop Navigation Arrows */}
+      {/* ── Arrows: minimal floating circles, kept inside the container until
+             there is genuinely room outside it. ── */}
       <button
-        onClick={handlePrev}
-        className={`hidden md:flex absolute top-1/2 -left-4 lg:-left-12 -translate-y-1/2 z-20 items-center justify-center w-12 h-12 rounded-full 
-        bg-white/80 dark:bg-[#0A101A]/90 backdrop-blur-md 
-        border border-brand-neon-blue/20 dark:border-brand-neon-blue/30
-        text-brand-blue-600 dark:text-white
-        shadow-[0_4px_20px_rgba(47,95,208,0.15)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.6)]
-        hover:bg-brand-neon-blue/10 dark:hover:bg-brand-neon-blue/20
-        hover:scale-110 hover:border-brand-neon-blue/40 dark:hover:border-brand-neon-blue/60
-        transition-all duration-300 group`}
+        type="button"
+        onClick={() => {
+          pauseForInteraction();
+          step(-1);
+        }}
         aria-label="Previous product"
+        className={`${styles.arrow} tap-flat hidden md:flex absolute top-[calc(50%-16px)] left-0 xl:-left-14 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 rounded-full border transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-105 active:scale-95 group`}
+        style={{
+          background: "color-mix(in srgb, var(--surface) 55%, transparent)",
+          borderColor: "var(--border-subtle)",
+        }}
       >
-        <ChevronLeft size={24} className="group-hover:-translate-x-0.5 transition-transform" />
-        <div className="absolute inset-0 rounded-full bg-brand-neon-blue/0 group-hover:bg-brand-neon-blue/20 blur-md transition-colors pointer-events-none" />
+        <ChevronLeft
+          size={18}
+          className="transition-transform duration-200 group-hover:-translate-x-0.5"
+        />
       </button>
 
       <button
-        onClick={handleNext}
-        className={`hidden md:flex absolute top-1/2 -right-4 lg:-right-12 -translate-y-1/2 z-20 items-center justify-center w-12 h-12 rounded-full 
-        bg-white/80 dark:bg-[#0A101A]/90 backdrop-blur-md 
-        border border-brand-neon-blue/20 dark:border-brand-neon-blue/30
-        text-brand-blue-600 dark:text-white
-        shadow-[0_4px_20px_rgba(47,95,208,0.15)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.6)]
-        hover:bg-brand-neon-blue/10 dark:hover:bg-brand-neon-blue/20
-        hover:scale-110 hover:border-brand-neon-blue/40 dark:hover:border-brand-neon-blue/60
-        transition-all duration-300 group`}
+        type="button"
+        onClick={() => {
+          pauseForInteraction();
+          step(1);
+        }}
         aria-label="Next product"
+        className={`${styles.arrow} tap-flat hidden md:flex absolute top-[calc(50%-16px)] right-0 xl:-right-14 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 rounded-full border transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-105 active:scale-95 group`}
+        style={{
+          background: "color-mix(in srgb, var(--surface) 55%, transparent)",
+          borderColor: "var(--border-subtle)",
+        }}
       >
-        <ChevronRight size={24} className="group-hover:translate-x-0.5 transition-transform" />
-        <div className="absolute inset-0 rounded-full bg-brand-neon-blue/0 group-hover:bg-brand-neon-blue/20 blur-md transition-colors pointer-events-none" />
+        <ChevronRight
+          size={18}
+          className="transition-transform duration-200 group-hover:translate-x-0.5"
+        />
       </button>
 
-      {/* Slider Viewport */}
-      <div className="overflow-hidden w-full">
-        <div 
-          className="flex hero-slider-track touch-pan-y select-none cursor-grab active:cursor-grabbing"
-          style={{
-            '--current-index': currentIndex,
-            '--drag-offset': `${dragOffset}px`,
-            '--slider-transition': isTransitioning && !isDragging ? 'transform 600ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
-          } as React.CSSProperties}
+      {/* ── Track ── */}
+      <div
+        ref={viewportRef}
+        className={`${styles.viewport} overflow-hidden w-full`}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        role="group"
+        aria-label="Product slides"
+      >
+        <div
+          ref={trackRef}
+          className={`${styles.track} ${animating ? styles.trackAnimating : ""} touch-pan-y select-none cursor-grab active:cursor-grabbing`}
+          style={{ "--index": index } as React.CSSProperties}
           onTransitionEnd={handleTransitionEnd}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUpOrLeave}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={endDrag}
+          onTouchCancel={endDrag}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={endDrag}
         >
-          {displayProducts.map((product, idx) => {
-            const { badge, Icon, colorTheme } = getMeta(product.slug);
+          {slides.map((product, i) => {
+            const { badge, Icon, isCrimson } = getMeta(product.slug);
             const content = productContent[product.slug];
             const coverImage = product.coverImageUrl || content?.image;
-            const shortDesc = product.description || "Premium digital product and access.";
+            const isReal = i >= count && i < count * 2;
 
             return (
-              <div 
-                key={`${product.id}-${idx}`} 
-                className="flex-shrink-0"
-                style={{ width: 'var(--item-width)' }}
+              <div
+                key={`${product.id}-${i}`}
+                className={`${styles.slide} ${animating && i === index ? styles.isActive : ""}`}
+                aria-hidden={!isReal}
               >
                 <Link
                   href={`/products/${product.slug}`}
                   onClick={(e) => {
-                    // Prevent navigation if we are just finishing a drag
-                    if (Math.abs(dragOffset) > 5) {
+                    // A swipe that ends on the composition must not navigate.
+                    if (suppressClick.current) {
                       e.preventDefault();
+                      suppressClick.current = false;
                     }
                   }}
+                  tabIndex={isReal ? 0 : -1}
                   draggable={false}
-                  className="group relative flex flex-col rounded-[20px] bg-white/90 dark:bg-[#0A101A]/90 backdrop-blur-xl border border-brand-neon-blue/20 dark:border-brand-neon-blue/25 overflow-hidden transition-all duration-500 hover:-translate-y-1 shadow-[0_8px_30px_rgba(47,95,208,0.1)] hover:shadow-[0_12px_40px_rgba(47,95,208,0.2)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)] dark:hover:shadow-[0_12px_40px_rgba(47,95,208,0.3)] active:scale-[0.985]"
+                  className={`${styles.compose} tap-flat group`}
+                  aria-label={`${product.name} — PKR ${product.price.toFixed(0)}`}
                 >
-                  {/* Soft Edge Highlight - Theme Aware */}
-                  <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-neon-blue/40 dark:via-brand-neon-blue/60 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
-                  
-                  {/* Subtle Premium Glows */}
-                  <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full blur-[45px] pointer-events-none transition-colors duration-700 ${colorTheme === 'crimson' ? 'bg-brand-neon-red/15 dark:bg-brand-neon-red/25 group-hover:bg-brand-neon-red/25 dark:group-hover:bg-brand-neon-red/35' : 'bg-brand-neon-blue/15 dark:bg-brand-neon-blue/25 group-hover:bg-brand-neon-blue/25 dark:group-hover:bg-brand-neon-blue/35'}`} />
-                  <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-brand-neon-blue/15 dark:bg-brand-neon-blue/20 rounded-full blur-[45px] pointer-events-none group-hover:bg-brand-neon-blue/25 transition-colors duration-700" />
+                  {/* ── PRODUCT VISUAL — floats over atmospheric light ── */}
+                  <div className={styles.visual}>
+                    <div className={styles.rail} aria-hidden />
+                    {coverImage ? (
+                      <Image
+                        src={coverImage}
+                        alt=""
+                        fill
+                        draggable={false}
+                        className={styles.visualImg}
+                        sizes="(max-width: 640px) 55vw, 260px"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Icon
+                        size={64}
+                        className={styles.visualIcon}
+                        style={{
+                          filter: isCrimson
+                            ? "drop-shadow(0 0 18px rgba(255,45,85,0.35))"
+                            : "drop-shadow(0 0 18px rgba(77,163,255,0.4))",
+                        }}
+                      />
+                    )}
+                  </div>
 
-                  <div className="flex min-h-[115px] sm:min-h-[140px] relative z-10 pointer-events-none">
-                    {/* Left: Image/Icon (36%) */}
-                    <div className="relative w-[36%] border-r border-brand-neon-blue/10 dark:border-brand-neon-blue/20 flex-shrink-0 bg-slate-50/50 dark:bg-black/30 overflow-hidden flex flex-col items-center justify-center">
-                      
-                      {/* Radial glow behind image */}
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(47,95,208,0.15)_0%,_transparent_70%)] dark:bg-[radial-gradient(circle_at_center,_rgba(47,95,208,0.3)_0%,_transparent_70%)] pointer-events-none" />
+                  {/* ── INFO — typographic hierarchy, no panels ── */}
+                  <div className={styles.info}>
+                    <span className={`${styles.infoBadge} ${isCrimson ? styles.crimson : ""}`}>
+                      {badge}
+                    </span>
 
-                      {coverImage ? (
-                        <div className="relative w-full h-full">
-                          <Image
-                            src={coverImage}
-                            alt={product.name}
-                            fill
-                            draggable={false}
-                            className="object-contain p-3 sm:p-4 transition-transform duration-700 group-hover:scale-[1.03]"
-                            sizes="(max-width: 640px) 36vw, 150px"
-                          />
-                        </div>
-                      ) : (
-                        <div className="relative z-10 text-brand-neon-blue drop-shadow-[0_0_12px_rgba(47,95,208,0.3)] dark:drop-shadow-[0_0_15px_rgba(47,95,208,0.5)]">
-                          <Icon size={42} className="transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-3" />
-                        </div>
-                      )}
-                      {/* Inner glowing edge for the image container */}
-                      <div className="absolute inset-0 ring-1 ring-inset ring-brand-neon-blue/5 dark:ring-white/5 pointer-events-none" />
-                    </div>
+                    <h3 className={styles.infoTitle}>{product.name}</h3>
 
-                    {/* Right: Content (64%) */}
-                    <div className="flex flex-col flex-1 p-3 sm:p-4 text-left justify-between w-[64%] bg-white/40 dark:bg-transparent">
-                      <div>
-                        <div className="mb-2">
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] bg-brand-neon-blue/10 border border-brand-neon-blue/25 dark:border-brand-neon-blue/40 text-[8px] sm:text-[9px] font-bold tracking-[0.15em] uppercase text-brand-blue-600 dark:text-brand-neon-blue shadow-[0_0_10px_rgba(47,95,208,0.1)]">
-                            {badge}
-                          </span>
-                        </div>
-                        
-                        {/* Product Title - Allow 2 lines */}
-                        <h3 className="text-[15px] sm:text-[16px] font-extrabold text-slate-900 dark:text-white leading-tight line-clamp-2 mb-1.5 tracking-wide">
-                          {product.name}
-                        </h3>
-                        
-                        {/* Subtitle */}
-                        <p className="text-[11px] sm:text-[12px] text-slate-600 dark:text-brand-ink-3 line-clamp-1 sm:line-clamp-2 pr-1 font-medium leading-relaxed">
-                          {shortDesc}
-                        </p>
+                    <p className={styles.infoDesc}>
+                      {product.description || "Premium digital product and access."}
+                    </p>
+
+                    <div className={styles.infoMeta}>
+                      <div className={styles.price}>
+                        <span className={styles.priceLabel}>Price</span>
+                        <span className={styles.priceValue}>
+                          PKR {product.price.toFixed(0)}
+                        </span>
                       </div>
-                      
-                      {/* Footer: Price & Premium Action Button */}
-                      <div className="flex items-end justify-between mt-2 pt-2 sm:mt-3 sm:pt-3 border-t border-brand-neon-blue/10 dark:border-border-subtle">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-slate-500 dark:text-brand-ink-3 uppercase tracking-wider mb-0.5">
-                            Price
-                          </span>
-                          <span className="text-[14px] sm:text-[18px] font-black text-slate-900 dark:text-white tracking-tight drop-shadow-sm dark:drop-shadow-[0_2px_8px_rgba(255,255,255,0.15)]">
-                            PKR {product.price.toFixed(0)}
-                          </span>
-                        </div>
-                        
-                        {/* Stronger CTA Button */}
-                        <div className="relative pointer-events-auto inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 h-[32px] sm:h-[42px] rounded-[10px] text-[9px] sm:text-[11px] font-bold tracking-[0.08em] uppercase text-white overflow-hidden transition-all duration-300 group-hover:scale-[1.03] shadow-[0_4px_12px_rgba(47,95,208,0.25)] group-hover:shadow-[0_6px_20px_rgba(47,95,208,0.4)]">
-                          {/* Button Background */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-[#173280] to-[#2F5FD0] opacity-95 transition-opacity duration-300 group-hover:opacity-100" />
-                          {/* Edge Glow */}
-                          <div className="absolute inset-0 rounded-[10px] border border-white/20 group-hover:border-white/40 transition-colors" />
-                          {/* Subtle red reflection on button hover */}
-                          <div className="absolute -right-4 -top-4 w-12 h-12 bg-brand-neon-red/30 rounded-full blur-[10px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                          
-                          <span className="relative z-10 flex items-center gap-1.5 drop-shadow-md">
-                            VIEW <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-1" />
-                          </span>
-                        </div>
-                      </div>
+
+                      <span
+                        className={`${styles.cta} ${isCrimson ? styles.crimson : ""} sheen`}
+                      >
+                        <span className="relative z-10 flex items-center gap-1.5">
+                          VIEW
+                          <ArrowRight size={13} className={styles.ctaArrow} />
+                        </span>
+                      </span>
                     </div>
                   </div>
                 </Link>
@@ -352,31 +398,35 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
         </div>
       </div>
 
-      {/* Premium Progress Indicators */}
-      <div className="flex items-center justify-center gap-2 mt-4 lg:mt-6">
-        {baseProducts.map((_, idx) => {
-          const isActive = (currentIndex % baseProducts.length) === idx;
-          return (
-            <div
-              key={idx}
-              className={`transition-all duration-500 rounded-full ${
-                isActive 
-                  ? "w-6 h-1.5 bg-brand-neon-blue shadow-[0_0_10px_rgba(47,95,208,0.6)]" 
-                  : "w-1.5 h-1.5 bg-slate-300 dark:bg-border-subtle hover:bg-brand-neon-blue/40 cursor-pointer"
-              }`}
-              onClick={() => {
-                handleInteraction();
-                // To jump safely, we find the closest index in our virtual array that matches this product
-                const currentSetStart = Math.floor(currentIndex / baseProducts.length) * baseProducts.length;
-                let targetIndex = currentSetStart + idx;
-                
-                setIsTransitioning(true);
-                setCurrentIndex(targetIndex);
-              }}
-            />
-          );
-        })}
-      </div>
+      {/* ── HUD: counter + minimal dots ── */}
+      {count > 1 && (
+        <div className={styles.hud}>
+          <span className={styles.counter} aria-hidden>
+            <span className={styles.counterStrong}>
+              {String(activeDot + 1).padStart(2, "0")}
+            </span>
+            {" / "}
+            {String(count).padStart(2, "0")}
+          </span>
+          <div className="flex items-center gap-1.5" role="tablist" aria-label="Slide position">
+            {baseProducts.map((_, i) => {
+              const isActive = activeDot === i;
+              return (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => jumpToDot(i)}
+                  aria-label={`Go to product ${i + 1}`}
+                  aria-current={isActive}
+                  className={styles.dot}
+                >
+                  <span className={`${styles.dotInner} ${isActive ? styles.active : ""}`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

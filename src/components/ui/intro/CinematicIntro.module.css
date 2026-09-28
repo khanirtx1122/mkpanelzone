@@ -1,0 +1,558 @@
+/* ==================================================================
+   MK PANEL ZONE — signature brand intro
+   Fully scoped styles. Nothing here leaks into the rest of the site.
+   Palette: graphite / midnight navy base, electric cobalt light,
+   a single restrained crimson reflection, cool white neutral.
+
+   Geometry note: every technical element is measured from --wm, the
+   wordmark's own font size, so the whole composition scales coherently
+   from 320px phones to ultra-wide monitors.
+   ================================================================== */
+
+.root {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 100;
+  overflow: hidden;
+  background-color: #050811;
+  pointer-events: auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------
+   SHUTTER PLANES — the two large visual planes that physically open
+   the website at the end of the sequence.
+   ------------------------------------------------------------------ */
+.plane {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50.5%;
+  overflow: hidden;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+.planeTop { top: 0; }
+.planeBottom { bottom: 0; }
+
+.planeInner {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+}
+.planeTop .planeInner { top: 0; }
+.planeBottom .planeInner { bottom: 0; }
+
+/* thin cobalt edge that activates as the planes part */
+.planeEdge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  mix-blend-mode: screen;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 163, 255, 0) 4%,
+    rgba(77, 163, 255, 0.55) 34%,
+    rgba(198, 222, 255, 0.9) 50%,
+    rgba(77, 163, 255, 0.55) 66%,
+    rgba(77, 163, 255, 0) 96%
+  );
+}
+.planeTop .planeEdge { bottom: 0; box-shadow: 0 6px 22px -6px rgba(47, 95, 208, 0.55); }
+.planeBottom .planeEdge { top: 0; box-shadow: 0 -6px 22px -6px rgba(47, 95, 208, 0.55); }
+
+/* ------------------------------------------------------------------
+   ATMOSPHERE — dimensional, minimal, never decorative for its own sake
+   ------------------------------------------------------------------ */
+.atmo { position: absolute; inset: 0; pointer-events: none; }
+
+/* deep graphite / midnight navy base */
+.atmoBase {
+  background:
+    radial-gradient(118% 94% at 50% 44%, #0e1928 0%, #0a1422 34%, #07101b 66%, #050811 100%);
+}
+
+/* central cobalt atmospheric illumination */
+.atmoGlow {
+  background:
+    radial-gradient(44% 32% at 50% 46%, rgba(47, 95, 208, 0.17) 0%, rgba(47, 95, 208, 0.06) 46%, rgba(47, 95, 208, 0) 74%);
+  mix-blend-mode: screen;
+}
+
+/* extremely faint technical grid */
+.atmoGrid {
+  background-image:
+    repeating-linear-gradient(to right, rgba(122, 158, 222, 0.075) 0 1px, rgba(0, 0, 0, 0) 1px 76px),
+    repeating-linear-gradient(to bottom, rgba(122, 158, 222, 0.075) 0 1px, rgba(0, 0, 0, 0) 1px 76px);
+  -webkit-mask-image: radial-gradient(57% 46% at 50% 47%, #000 0%, rgba(0, 0, 0, 0.5) 56%, transparent 100%);
+  mask-image: radial-gradient(57% 46% at 50% 47%, #000 0%, rgba(0, 0, 0, 0.5) 56%, transparent 100%);
+}
+
+/* tiny premium grain — keeps the flat dark from banding */
+.atmoNoise {
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* almost invisible vignette */
+.atmoVignette {
+  background:
+    radial-gradient(122% 104% at 50% 50%, rgba(2, 3, 8, 0) 36%, rgba(2, 3, 8, 0.4) 78%, rgba(2, 3, 8, 0.72) 100%);
+}
+
+/* restrained crimson reflected light, one distant edge only */
+.atmoRed {
+  background:
+    radial-gradient(34% 28% at 95% 88%, rgba(179, 18, 47, 0.14) 0%, rgba(179, 18, 47, 0.045) 44%, rgba(179, 18, 47, 0) 72%);
+  mix-blend-mode: screen;
+}
+
+/* glow that concentrates toward the center as the structure releases */
+.centerGlow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(30% 22% at 50% 46%, rgba(77, 163, 255, 0.2) 0%, rgba(47, 95, 208, 0.09) 42%, rgba(47, 95, 208, 0) 74%);
+}
+
+/* ------------------------------------------------------------------
+   CONTENT STAGE
+   ------------------------------------------------------------------ */
+.content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stack {
+  /* the single source of truth for the whole composition */
+  --wm: clamp(28px, 8.6vw, 74px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform, clip-path;
+}
+
+/* the lockup box — its width is pinned by the wordmark sizer so the
+   composition never shifts while tracking compresses */
+.frame {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+}
+
+.rows {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: var(--wm);
+  line-height: 1;
+  letter-spacing: 0;
+  color: #edf3fb;
+  white-space: nowrap;
+  text-rendering: geometricPrecision;
+  font-kerning: normal;
+}
+
+.mkGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 0.035em;
+}
+
+/* ------------------------------------------------------------------
+   SLICED TYPOGRAPHY ENGINE
+   Each slice is an identical copy of the word clipped to a band. The
+   union of the bands reconstructs the word, so fragments always lock
+   into perfect alignment once settled.
+   ------------------------------------------------------------------ */
+.word {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.wordSizer {
+  display: inline-block;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.wordSliceWrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  will-change: transform, clip-path;
+}
+
+.wordSlice {
+  display: block;
+  white-space: nowrap;
+  will-change: transform, clip-path, filter;
+}
+
+/* ------------------------------------------------------------------
+   SIGNAL + COORDINATES + RAILS
+   ------------------------------------------------------------------ */
+/* the signal layer is anchored to the wordmark frame, so the axis always
+   matches the brand's optical centre no matter the viewport */
+.signalWrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 132%;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.pointWrap {
+  position: absolute;
+  left: 47.6%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.signalAxis {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(77, 163, 255, 0) 0%,
+    rgba(77, 163, 255, 0.5) 26%,
+    rgba(216, 235, 255, 0.95) 50%,
+    rgba(77, 163, 255, 0.5) 74%,
+    rgba(77, 163, 255, 0) 100%
+  );
+  box-shadow: 0 0 10px rgba(47, 95, 208, 0.5);
+}
+
+.energyPoint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #d8ebff;
+  box-shadow:
+    0 0 6px rgba(140, 190, 255, 0.9),
+    0 0 16px rgba(47, 95, 208, 0.8);
+}
+
+.energyBloom {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: clamp(120px, calc(var(--wm) * 2.3), 172px);
+  height: clamp(120px, calc(var(--wm) * 2.3), 172px);
+  margin: calc(clamp(120px, calc(var(--wm) * 2.3), 172px) / -2) 0 0
+    calc(clamp(120px, calc(var(--wm) * 2.3), 172px) / -2);
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(77, 163, 255, 0.3) 0%, rgba(47, 95, 208, 0.1) 34%, rgba(47, 95, 208, 0) 70%);
+}
+
+.rails {
+  position: absolute;
+  left: calc(var(--wm) * -0.95);
+  right: calc(var(--wm) * -0.95);
+  top: calc(var(--wm) * -0.5);
+  bottom: calc(var(--wm) * -0.44);
+  z-index: 2;
+  pointer-events: none;
+  will-change: clip-path;
+}
+
+.railTop {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 0;
+  height: 1px;
+  transform-origin: 50% 50%;
+  background: linear-gradient(
+    90deg,
+    rgba(47, 95, 208, 0) 0%,
+    rgba(77, 163, 255, 0.55) 22%,
+    rgba(198, 222, 255, 0.85) 50%,
+    rgba(77, 163, 255, 0.55) 78%,
+    rgba(47, 95, 208, 0) 100%
+  );
+}
+
+.railBottomLeft {
+  position: absolute;
+  right: 50.4%;
+  width: 21%;
+  bottom: 0;
+  height: 1px;
+  transform-origin: 100% 50%;
+  background: linear-gradient(90deg, rgba(47, 95, 208, 0) 0%, rgba(122, 178, 255, 0.6) 100%);
+}
+
+.railBottomRight {
+  position: absolute;
+  left: 50.4%;
+  width: 21%;
+  bottom: 0;
+  height: 1px;
+  transform-origin: 0% 50%;
+  background: linear-gradient(90deg, rgba(122, 178, 255, 0.6) 0%, rgba(47, 95, 208, 0) 100%);
+}
+
+.railTick {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: clamp(5px, calc(var(--wm) * 0.09), 7px);
+  margin-left: -0.5px;
+  transform-origin: 50% 0%;
+  background: rgba(122, 178, 255, 0.6);
+}
+
+.railV {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--wm) * -0.3);
+  width: 1px;
+  height: calc(var(--wm) * 0.42);
+  margin-left: -0.5px;
+  transform-origin: 50% 0%;
+  background: linear-gradient(180deg, rgba(122, 178, 255, 0.55), rgba(122, 178, 255, 0));
+}
+
+/* corner registration brackets */
+.bracket {
+  position: absolute;
+  width: clamp(7px, calc(var(--wm) * 0.14), 11px);
+  height: clamp(7px, calc(var(--wm) * 0.14), 11px);
+  border-color: rgba(122, 178, 255, 0.42);
+  border-style: solid;
+  border-width: 0;
+}
+.bracketTl { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+.bracketTr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+.bracketBl { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+.bracketBr { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+
+/* micro coordinate marks — the "design-grid registration" ticks */
+.micro {
+  position: absolute;
+  background: rgba(122, 178, 255, 0.5);
+}
+.microV { width: 1px; height: clamp(4px, calc(var(--wm) * 0.08), 6px); }
+.microH { width: clamp(4px, calc(var(--wm) * 0.08), 6px); height: 1px; }
+.microTl { top: calc(var(--wm) * 0.3); left: calc(var(--wm) * 0.86); }
+.microTr { top: calc(var(--wm) * 0.3); right: calc(var(--wm) * 0.86); }
+.microBl { bottom: calc(var(--wm) * 0.34); left: calc(var(--wm) * 0.86); }
+.microBr { bottom: calc(var(--wm) * 0.34); right: calc(var(--wm) * 0.86); }
+
+/* ------------------------------------------------------------------
+   SIGNATURE LINE + OPTICAL LIGHT PASS
+   ------------------------------------------------------------------ */
+.sigTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--wm) * -0.26);
+  height: 1px;
+  pointer-events: none;
+}
+
+.sigLine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 1px;
+  width: 52%;
+  transform-origin: 0% 50%;
+  background: linear-gradient(90deg, rgba(77, 163, 255, 0.9) 0%, rgba(147, 196, 255, 0.95) 70%, rgba(216, 235, 255, 1) 100%);
+}
+
+.sigLineGlow {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 3px;
+  width: 52%;
+  transform-origin: 0% 50%;
+  filter: blur(2.5px);
+  mix-blend-mode: screen;
+  background: linear-gradient(90deg, rgba(47, 95, 208, 0) 0%, rgba(77, 163, 255, 0.5) 60%, rgba(147, 196, 255, 0.6) 100%);
+}
+
+.sigDot {
+  position: absolute;
+  left: 0;
+  top: -1.5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #e8f4ff;
+  box-shadow: 0 0 8px rgba(147, 196, 255, 0.95);
+}
+
+.lightWrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lightBand {
+  position: absolute;
+  top: -18%;
+  bottom: -18%;
+  left: 0;
+  width: 26%;
+  mix-blend-mode: screen;
+  background: linear-gradient(
+    90deg,
+    rgba(198, 222, 255, 0) 0%,
+    rgba(198, 222, 255, 0.09) 36%,
+    rgba(232, 244, 255, 0.22) 52%,
+    rgba(198, 222, 255, 0.09) 68%,
+    rgba(198, 222, 255, 0) 100%
+  );
+  transform: skewX(-14deg);
+}
+
+.crimsonEdge {
+  position: absolute;
+  top: 6%;
+  bottom: 6%;
+  right: 9%;
+  width: 2px;
+  mix-blend-mode: screen;
+  background: linear-gradient(180deg, rgba(255, 45, 85, 0) 0%, rgba(255, 45, 85, 0.75) 50%, rgba(255, 45, 85, 0) 100%);
+  filter: blur(1px);
+}
+
+/* ------------------------------------------------------------------
+   DESCRIPTOR + MICRO SYSTEM SIGNATURE
+   ------------------------------------------------------------------ */
+.descriptor {
+  margin-top: calc(var(--wm) * 0.62);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(9px, 2.4vw, 11.5px);
+  line-height: 1.35;
+  color: rgba(198, 214, 236, 0.62);
+  white-space: nowrap;
+}
+
+.descriptorMask {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  /* breathing room so the wider start-tracking is never clipped sideways */
+  padding: 0 1.4em;
+  margin: 0 -1.4em;
+}
+
+.descriptorCenter {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.descriptorText {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform, letter-spacing;
+}
+
+.status {
+  margin-top: calc(var(--wm) * 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(7.5px, 1.75vw, 9px);
+  letter-spacing: 0.34em;
+  color: rgba(122, 178, 255, 0.72);
+  white-space: nowrap;
+}
+
+.statusDotWrap {
+  position: relative;
+  width: 5px;
+  height: 5px;
+  flex: none;
+}
+
+.statusDot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #7cb6ff;
+  box-shadow: 0 0 7px rgba(77, 163, 255, 0.8);
+}
+
+.statusRing {
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid rgba(122, 178, 255, 0.7);
+}
+
+.statusText {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: clip-path;
+}
+
+/* ------------------------------------------------------------------
+   MOBILE ART DIRECTION — individually tuned, not a scaled desktop
+   ------------------------------------------------------------------ */
+@media (max-width: 767px) {
+  .rails {
+    left: calc(var(--wm) * -0.74);
+    right: calc(var(--wm) * -0.74);
+    top: calc(var(--wm) * -0.44);
+    bottom: calc(var(--wm) * -0.4);
+  }
+  .railTop { left: 22%; right: 22%; }
+  .railBottomLeft { width: 17%; }
+  .railBottomRight { width: 17%; }
+  .bracket { border-color: rgba(122, 178, 255, 0.34); }
+  .signalWrap { width: 150%; }
+  .descriptor { font-size: clamp(9px, 2.5vw, 10.5px); }
+  .status { font-size: clamp(7.5px, 1.9vw, 8.5px); letter-spacing: 0.28em; }
+}
+
+/* low-end devices: keep the choreography, drop the expensive paint */
+@media (prefers-reduced-transparency: reduce) {
+  .atmoNoise { display: none; }
+}

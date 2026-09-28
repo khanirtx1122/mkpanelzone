@@ -19,6 +19,7 @@ import {
   MessageSquare, 
   Palette, 
   LifeBuoy, 
+  Gift,
   Settings, 
   ScrollText 
 } from "lucide-react";
@@ -73,6 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Content Manager", href: "/mkpanelzoneadmin/content", icon: FileText },
       { name: "Announcements", href: "/mkpanelzoneadmin/announcements", icon: Megaphone },
       { name: "Popups", href: "/mkpanelzoneadmin/popups", icon: MessageSquare },
+      { name: "Free Panel Offer", href: "/mkpanelzoneadmin/free-panel", icon: Gift },
       { name: "Website Design", href: "/mkpanelzoneadmin/design", icon: Palette },
       { name: "Footer", href: "/mkpanelzoneadmin/footer", icon: Layers },
       { name: "Support", href: "/mkpanelzoneadmin/support", icon: LifeBuoy },
