@@ -1,24 +1,30 @@
 /*
- * OPEN CINEMATIC PRODUCT SHOWCASE.
+ * LUXURY PRODUCT EDITORIAL — open showcase, no boxes.
  *
- * Track geometry is unchanged (one index step == 100% of the track, clones
- * on both sides for the seamless loop) — only the presentation is open:
- * no card frames, no nested boxes. The product floats over atmospheric
- * light; hierarchy comes from typography and spacing.
+ * Stage (left): layered cobalt atmosphere, crimson reflection, partial
+ * corner strokes, elevated artwork, signature data rail.
+ * Info (right): typographic hierarchy only — badge, title, excerpt,
+ * price, single CTA.
+ * HUD: counter + animated autoplay rail + compact arrows inside the
+ * composition (never at viewport edges).
+ *
+ * Track geometry is unchanged: one index step == 100% of the track,
+ * clones on both sides for the seamless loop — only the presentation
+ * is rebuilt.
  */
 
 .viewport {
-  --item-width: 88%;
+  --item-width: 92%;
   --drag: 0px;
   position: relative;
 }
 
 @media (min-width: 640px) {
-  .viewport { --item-width: 78%; }
+  .viewport { --item-width: 88%; }
 }
 
 @media (min-width: 1024px) {
-  .viewport { --item-width: 86%; }
+  .viewport { --item-width: 92%; }
 }
 
 .track {
@@ -39,154 +45,235 @@
   justify-content: center;
 }
 
-/* ── The open composition — NO background, NO border, NO shadow ── */
+/* ── The open composition — NO background, NO border, NO box ── */
 .compose {
   width: var(--item-width);
   max-width: 100%;
   display: flex;
   align-items: center;
-  gap: clamp(14px, 4vw, 44px);
-  padding: clamp(6px, 1.6vw, 14px) 0;
+  gap: clamp(20px, 4vw, 56px);
+  padding: clamp(4px, 1.2vw, 12px) 0;
 }
 
-/* ── PRODUCT VISUAL — floats over atmospheric light, no frame ── */
+/* ══════════════════════════════════════════════════════════════
+   PRODUCT STAGE — artwork lit and elevated, never in a card
+   ══════════════════════════════════════════════════════════════ */
 .visual {
   position: relative;
-  flex: 0 0 clamp(120px, 38%, 330px);
-  aspect-ratio: 1 / 0.92;
+  flex: 0 0 clamp(200px, 44%, 480px);
+  aspect-ratio: 1 / 0.94;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
 }
 
-/* cobalt halo behind the product */
+/* Controlled elliptical cobalt atmosphere — NOT a circular blob */
 .visual::before {
   content: "";
   position: absolute;
-  inset: -20% -24%;
+  inset: -18% -22%;
   background: radial-gradient(
-    circle at 50% 46%,
-    rgba(47, 95, 208, 0.26) 0%,
-    rgba(47, 95, 208, 0.08) 44%,
-    transparent 68%
+    ellipse 62% 54% at 50% 46%,
+    rgba(47, 95, 208, 0.32) 0%,
+    rgba(47, 95, 208, 0.11) 46%,
+    transparent 72%
   );
   pointer-events: none;
 }
 
-/* tiny crimson reflection, low-right — almost subconscious */
+/* Tiny crimson reflection at the lower-opposite edge */
 .visual::after {
   content: "";
   position: absolute;
-  right: -8%;
-  bottom: -4%;
-  width: 48%;
-  height: 40%;
-  background: radial-gradient(ellipse at center, rgba(179, 18, 47, 0.14), transparent 70%);
+  right: -6%;
+  bottom: -3%;
+  width: 52%;
+  height: 42%;
+  background: radial-gradient(ellipse at center, rgba(179, 18, 47, 0.16), transparent 70%);
   pointer-events: none;
 }
 
 [data-theme="light"] .visual::before {
   background: radial-gradient(
-    circle at 50% 46%,
-    rgba(47, 95, 208, 0.16) 0%,
-    rgba(47, 95, 208, 0.05) 44%,
-    transparent 68%
+    ellipse 62% 54% at 50% 46%,
+    rgba(47, 95, 208, 0.18) 0%,
+    rgba(47, 95, 208, 0.06) 46%,
+    transparent 72%
   );
 }
 [data-theme="light"] .visual::after {
-  background: radial-gradient(ellipse at center, rgba(179, 18, 47, 0.08), transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(179, 18, 47, 0.09), transparent 70%);
+}
+
+/* Layered depth: soft grounded shadow + slight elevation */
+.visual .stage {
+  position: relative;
+  z-index: 1;
+  width: 86%;
+  height: 86%;
+  transform: translateY(-3px);
+  filter: drop-shadow(0 26px 34px rgba(2, 8, 23, 0.45))
+    drop-shadow(0 6px 12px rgba(2, 8, 23, 0.3));
+}
+[data-theme="light"] .visual .stage {
+  filter: drop-shadow(0 22px 30px rgba(15, 23, 42, 0.22))
+    drop-shadow(0 4px 10px rgba(15, 23, 42, 0.12));
+}
+
+/* Nearly invisible partial frame — cobalt corner strokes, open rectangle */
+.corners {
+  position: absolute;
+  inset: 4% 6%;
+  z-index: 2;
+  pointer-events: none;
+}
+.corners::before,
+.corners::after {
+  content: "";
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  opacity: 0.7;
+}
+.corners::before {
+  top: 0;
+  left: 0;
+  border-top: 1.5px solid rgba(77, 163, 255, 0.75);
+  border-left: 1.5px solid rgba(77, 163, 255, 0.75);
+}
+.corners::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1.5px solid rgba(255, 45, 85, 0.55);
+  border-right: 1.5px solid rgba(255, 45, 85, 0.55);
+}
+[data-theme="light"] .corners::before {
+  border-color: rgba(47, 95, 208, 0.6);
+}
+[data-theme="light"] .corners::after {
+  border-color: rgba(179, 18, 47, 0.45);
 }
 
 .visualImg {
-  position: relative;
-  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
 .visualIcon {
-  position: relative;
-  z-index: 1;
   color: var(--color-brand-neon-blue);
 }
 
-/* thin cobalt rail beside the visual — signature accent, not a frame */
-.rail {
+/* Signature data rail — thin cobalt line reaching toward the content.
+   Real data only (slide number + duration label). */
+.dataRail {
   position: absolute;
-  left: -12px;
-  top: 14%;
-  bottom: 16%;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(77, 163, 255, 0.55) 28%,
-    rgba(77, 163, 255, 0.55) 72%,
-    transparent
-  );
+  left: 8%;
+  right: -18%;
+  bottom: 6%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   pointer-events: none;
 }
-[data-theme="light"] .rail {
+.dataNum {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--color-brand-neon-blue);
+  font-variant-numeric: tabular-nums;
+}
+.dataLine {
+  flex: 1;
+  height: 1px;
   background: linear-gradient(
-    180deg,
-    transparent,
-    rgba(47, 95, 208, 0.45) 28%,
-    rgba(47, 95, 208, 0.45) 72%,
-    transparent
+    90deg,
+    rgba(77, 163, 255, 0.7) 0%,
+    rgba(77, 163, 255, 0.22) 55%,
+    transparent 100%
   );
 }
-@media (max-width: 639px) {
-  .rail { display: none; }
+.dataLabel {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+[data-theme="light"] .dataLine {
+  background: linear-gradient(
+    90deg,
+    rgba(47, 95, 208, 0.55) 0%,
+    rgba(47, 95, 208, 0.18) 55%,
+    transparent 100%
+  );
 }
 
-/* ── INFO — typography hierarchy, no panels ── */
+/* ══════════════════════════════════════════════════════════════
+   CONTENT — typographic hierarchy, no panels
+   ══════════════════════════════════════════════════════════════ */
 .info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: clamp(5px, 1vw, 9px);
+  gap: clamp(6px, 1.1vw, 12px);
 }
 
+/* Badge — small uppercase, thin cobalt outline, tiny indicator dot */
 .infoBadge {
   display: inline-flex;
   align-items: center;
-  height: 19px;
-  padding: 0 8px;
+  gap: 6px;
+  height: 21px;
+  padding: 0 9px;
   border-radius: 5px;
-  border: 1px solid rgba(77, 163, 255, 0.28);
-  background: rgba(77, 163, 255, 0.10);
+  border: 1px solid rgba(77, 163, 255, 0.32);
+  background: rgba(77, 163, 255, 0.08);
   color: var(--color-brand-neon-blue);
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
-.infoBadge.crimson {
-  border-color: rgba(255, 45, 85, 0.28);
-  background: rgba(255, 45, 85, 0.10);
+.infoBadge::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.infoBadge.crimsonTone {
+  border-color: rgba(255, 45, 85, 0.32);
+  background: rgba(255, 45, 85, 0.08);
   color: var(--color-brand-neon-red);
 }
 
+/* Title — strongest content element after the visual */
 .infoTitle {
   font-weight: 800;
-  font-size: clamp(17px, 2.3vw, 26px);
-  line-height: 1.14;
-  letter-spacing: -0.01em;
+  font-size: clamp(22px, 2.9vw, 36px);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
   color: var(--foreground);
+  max-width: 21ch;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+/* Description — 1–2 clean lines, presentation excerpt only */
 .infoDesc {
   color: var(--text-3);
-  font-size: clamp(11.5px, 1.2vw, 13.5px);
+  font-size: clamp(12px, 1.25vw, 14.5px);
   line-height: 1.55;
+  max-width: 46ch;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -196,11 +283,12 @@
 .infoMeta {
   display: flex;
   align-items: center;
-  gap: clamp(12px, 2.4vw, 22px);
-  margin-top: clamp(4px, 1vw, 10px);
+  gap: clamp(14px, 2.6vw, 28px);
+  margin-top: clamp(4px, 1vw, 12px);
   width: 100%;
 }
 
+/* Price — label + refined number, no box */
 .price {
   display: flex;
   flex-direction: column;
@@ -209,152 +297,297 @@
 .priceLabel {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-3);
 }
 .priceValue {
-  font-size: clamp(16px, 2.1vw, 22px);
+  font-size: clamp(18px, 2.4vw, 27px);
   font-weight: 900;
   letter-spacing: -0.01em;
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
+/* CTA — single premium action */
 .cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: clamp(34px, 3vw, 40px);
-  padding: 0 clamp(14px, 2vw, 20px);
-  border-radius: 10px;
+  gap: 7px;
+  height: clamp(42px, 4vw, 46px);
+  padding: 0 clamp(18px, 2.4vw, 26px);
+  border-radius: 11px;
   color: #fff;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #1e3fa8, #2f5fd0);
-  box-shadow: 0 4px 14px rgba(47, 95, 208, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #1a3690 0%, #2f5fd0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -12px 24px rgba(77, 163, 255, 0.16),
+    0 8px 20px rgba(47, 95, 208, 0.28);
   flex-shrink: 0;
   margin-left: auto;
+  transition:
+    transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.cta.crimson {
-  background: linear-gradient(135deg, #7a0e23, #b3122f);
-  box-shadow: 0 4px 14px rgba(179, 18, 47, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+.cta.crimsonCta {
+  background: linear-gradient(135deg, #7a0e23 0%, #b3122f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -12px 24px rgba(255, 45, 85, 0.14),
+    0 8px 20px rgba(179, 18, 47, 0.28);
+}
+.compose:hover .cta {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -12px 24px rgba(77, 163, 255, 0.2),
+    0 12px 26px rgba(47, 95, 208, 0.38);
+}
+.compose:hover .cta.crimsonCta {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -12px 24px rgba(255, 45, 85, 0.18),
+    0 12px 26px rgba(179, 18, 47, 0.38);
+}
+.cta:active {
+  transform: scale(0.98);
 }
 .ctaArrow {
   transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.compose:hover .ctaArrow { transform: translateX(2px); }
+.compose:hover .ctaArrow {
+  transform: translateX(2px);
+}
 
-/* ── MOBILE — stacked naturally, still no boxes ── */
+/* ══════════════════════════════════════════════════════════════
+   HUD — counter + autoplay progress rail + compact arrows
+   ══════════════════════════════════════════════════════════════ */
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(12px, 3vw, 28px);
+  margin-top: clamp(10px, 2vw, 18px);
+  padding: 0 clamp(4px, 4vw, 48px);
+}
+.hudProgress {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 20px);
+  flex: 1;
+  min-width: 0;
+}
+.counter {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.counterStrong {
+  color: var(--foreground);
+}
+.counterDim {
+  color: var(--text-3);
+}
+
+/* Thin rail that fills across the autoplay duration */
+.railTrack {
+  position: relative;
+  flex: 1;
+  max-width: 240px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.railFill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #2f5fd0, #4da3ff);
+  transform-origin: left center;
+  animation-name: railFill;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes railFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.hudNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-2);
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms,
+    color 220ms,
+    box-shadow 220ms;
+}
+.arrow:hover {
+  border-color: rgba(77, 163, 255, 0.6);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px rgba(77, 163, 255, 0.2),
+    0 0 16px rgba(47, 95, 208, 0.3);
+}
+.arrow:active {
+  transform: scale(0.94);
+}
+[data-theme="light"] .arrow {
+  background: color-mix(in srgb, #ffffff 70%, transparent);
+}
+[data-theme="light"] .arrow:hover {
+  border-color: rgba(47, 95, 208, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(47, 95, 208, 0.16),
+    0 6px 14px rgba(47, 95, 208, 0.16);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE — purpose-built stacked composition, still no boxes
+   ══════════════════════════════════════════════════════════════ */
 @media (max-width: 639px) {
   .compose {
     flex-direction: column;
     text-align: center;
-    gap: 10px;
-    padding-top: 2px;
+    gap: 14px;
+    padding-top: 0;
   }
   .visual {
     flex: 0 0 auto;
-    width: min(58%, 210px);
+    width: min(78%, 300px);
+    aspect-ratio: 1 / 0.9;
   }
-  .info { align-items: center; }
-  .infoMeta { justify-content: center; }
-  .cta { margin-left: 0; }
+  .visual .stage {
+    width: 90%;
+    height: 90%;
+  }
+  .dataRail {
+    left: 4%;
+    right: 4%;
+    bottom: 2%;
+  }
+  .info {
+    align-items: center;
+    width: 100%;
+  }
+  .infoTitle {
+    max-width: 100%;
+    font-size: clamp(21px, 6vw, 26px);
+  }
+  .infoDesc {
+    max-width: 100%;
+  }
+  .infoMeta {
+    justify-content: center;
+  }
+  .cta {
+    margin-left: 0;
+  }
+  .hud {
+    /* Align counter/arrows with the composition edges (item-width 92%),
+       never flush against the viewport. */
+    padding: 0 4%;
+    gap: 12px;
+  }
+  .railTrack {
+    max-width: none;
+  }
+  .arrow {
+    width: 40px;
+    height: 40px;
+  }
 }
 
-/* ── ENTRANCE MOTION — active slide only, while the track moves ──
-   Image leads, text follows in small steps. Transform + opacity only. */
+/* ══════════════════════════════════════════════════════════════
+   ENTRANCE MOTION — masked image reveal + staggered text
+   Active slide only, while the track moves. Transform/opacity/
+   clip-path only. Duration ~620ms cubic-bezier(.22,1,.36,1).
+   ══════════════════════════════════════════════════════════════ */
 .trackAnimating .isActive .info > * {
-  animation: infoIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: infoIn 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.trackAnimating .isActive .info > *:nth-child(2) { animation-delay: 45ms; }
-.trackAnimating .isActive .info > *:nth-child(3) { animation-delay: 90ms; }
-.trackAnimating .isActive .info > *:nth-child(4) { animation-delay: 135ms; }
-.trackAnimating .isActive .visualImg,
+.trackAnimating .isActive .info > *:nth-child(2) { animation-delay: 40ms; }
+.trackAnimating .isActive .info > *:nth-child(3) { animation-delay: 80ms; }
+.trackAnimating .isActive .info > *:nth-child(4) { animation-delay: 120ms; }
+.trackAnimating .isActive .stage {
+  animation: stageIn 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 .trackAnimating .isActive .visualIcon {
-  animation: imgIn 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: imgIn 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.trackAnimating .isActive .dataRail {
+  animation: infoIn 560ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+.trackAnimating .isActive .infoBadge::before {
+  animation: dotPop 500ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both;
 }
 
 @keyframes infoIn {
   from { opacity: 0; transform: translateX(22px); }
   to   { opacity: 1; transform: none; }
 }
+@keyframes stageIn {
+  from {
+    opacity: 0.4;
+    transform: translateX(45px) translateY(-3px) scale(0.985);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-3px);
+    clip-path: inset(0 0 0 0);
+  }
+}
 @keyframes imgIn {
-  from { opacity: 0.35; transform: translateX(34px) scale(0.985); }
+  from { opacity: 0; transform: translateX(30px) scale(0.985); }
   to   { opacity: 1; transform: none; }
+}
+@keyframes dotPop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .trackAnimating { transition-duration: 1ms; }
   .trackAnimating .isActive .info > *,
-  .trackAnimating .isActive .visualImg,
-  .trackAnimating .isActive .visualIcon {
+  .trackAnimating .isActive .stage,
+  .trackAnimating .isActive .visualIcon,
+  .trackAnimating .isActive .dataRail,
+  .trackAnimating .isActive .infoBadge::before {
     animation: none !important;
   }
+  .railFill { animation: none !important; transform: scaleX(1); }
 }
+/* Entrance choreography is cut on slow devices (clip-path + multi-element
+   stagger), but the 2px progress rail keeps running: it is a single
+   composited transform and autoplay still advances there. */
 html[data-perf="low"] .trackAnimating .isActive .info > *,
-html[data-perf="low"] .trackAnimating .isActive .visualImg,
-html[data-perf="low"] .trackAnimating .isActive .visualIcon {
+html[data-perf="low"] .trackAnimating .isActive .stage,
+html[data-perf="low"] .trackAnimating .isActive .visualIcon,
+html[data-perf="low"] .trackAnimating .isActive .dataRail,
+html[data-perf="low"] .trackAnimating .isActive .infoBadge::before {
   animation: none !important;
-}
-
-/* ── ARROWS — minimal floating circles, no glass box ── */
-.arrow {
-  color: var(--text-2);
-  transition:
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 200ms,
-    color 200ms,
-    box-shadow 200ms;
-}
-.arrow:hover {
-  border-color: rgba(77, 163, 255, 0.55);
-  color: var(--foreground);
-  box-shadow: 0 0 0 1px rgba(77, 163, 255, 0.18), 0 0 14px rgba(47, 95, 208, 0.22);
-}
-[data-theme="light"] .arrow:hover {
-  border-color: rgba(47, 95, 208, 0.5);
-  box-shadow: 0 0 0 1px rgba(47, 95, 208, 0.15), 0 4px 12px rgba(47, 95, 208, 0.14);
-}
-
-/* ── HUD — counter + small premium dots ── */
-.hud {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin-top: clamp(14px, 2.4vw, 22px);
-}
-.counter {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.22em;
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
-}
-.counterStrong { color: var(--foreground); }
-.dot {
-  height: 22px;
-  padding: 0 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dotInner {
-  display: block;
-  border-radius: 999px;
-  height: 4px;
-  width: 4px;
-  background: var(--border-subtle);
-  transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms;
-}
-.dotInner.active {
-  width: 22px;
-  background: var(--color-brand-neon-blue);
-  box-shadow: 0 0 8px rgba(47, 95, 208, 0.5);
 }

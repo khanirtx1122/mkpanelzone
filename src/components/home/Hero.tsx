@@ -15,7 +15,7 @@ export async function Hero({ products }: { products: Product[] }) {
       {/* Top edge accent */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-neon-blue/20 to-transparent pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-2 text-center">
+      <div className="relative z-10 w-full max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-0 text-center">
 
         {/* Owner-configurable compact CTA chip — falls back to the static
             badge when disabled, so the layout never leaves a blank gap. */}
@@ -81,7 +81,7 @@ export async function Hero({ products }: { products: Product[] }) {
 
         {/* Sub-text */}
         <p
-          className="text-brand-ink-3 leading-relaxed mb-6 max-w-md mx-auto"
+          className="text-brand-ink-3 leading-relaxed mb-4 max-w-md mx-auto"
           style={{ fontSize: "clamp(13px, 3.8vw, 15px)" }}
         >
           Premium digital products, trusted access and everything you need in one place.

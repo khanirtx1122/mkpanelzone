@@ -19,8 +19,8 @@ import type { Product } from "@/components/ui/ProductCard";
 import styles from "./HeroProductSlider.module.css";
 
 const COPIES = 3;
-const AUTOPLAY_MS = 2800;
-const RESUME_AFTER_INTERACTION_MS = 3800;
+const AUTOPLAY_MS = 3000;
+const RESUME_AFTER_INTERACTION_MS = 4000;
 const DRAG_COMMIT_PX = 42;
 
 function getMeta(slug: string) {
@@ -48,6 +48,28 @@ function getMeta(slug: string) {
   return { badge, Icon, isCrimson };
 }
 
+/**
+ * Presentation-only excerpt: strips markdown/emoji noise from the raw
+ * description so the hero reads editorially. The product record itself
+ * is never modified — full details stay on the Product Detail page.
+ */
+function excerpt(text?: string) {
+  if (!text) return "Premium digital product and access.";
+  const cleaned = text
+    .replace(/\*\*/g, "")
+    .replace(
+      /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= 150) return cleaned;
+  const cut = cleaned.slice(0, 150);
+  const lastDot = Math.max(cut.lastIndexOf("."), cut.lastIndexOf("!"));
+  if (lastDot > 60) return cut.slice(0, lastDot + 1);
+  return cut.replace(/\s+\S*$/, "") + "…";
+}
+
 export function HeroProductSlider({ products }: { products: Product[] }) {
   const baseProducts = useMemo(() => (products.length > 0 ? products.slice(0, 5) : []), [products]);
   const count = baseProducts.length;
@@ -62,6 +84,10 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
   const [index, setIndex] = useState(count);
   const [animating, setAnimating] = useState(true);
   const [userPaused, setUserPaused] = useState(false);
+  /** True right after an invisible loop rewind: the corrected slide is the
+   *  same product the user is already looking at, so it must NOT replay the
+   *  entrance animation (that would reveal the seam). */
+  const [suppressEnter, setSuppressEnter] = useState(false);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -93,15 +119,24 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
     []
   );
 
-  const goTo = useCallback((next: number, animate = true) => {
-    setAnimating(animate);
-    setIndex(next);
+  const step = useCallback((delta: number) => {
+    setSuppressEnter(false);
+    setAnimating(true);
+    setIndex((prev) => prev + delta);
   }, []);
 
-  const step = useCallback(
-    (delta: number) => {
-      setAnimating(true);
-      setIndex((prev) => prev + delta);
+  // Re-arm the track's transition class one painted frame after the rewind
+  // (the correction itself must land with transition disabled). Also keeps
+  // autoplay alive: its effect early-returns while `animating` is false.
+  const rearmTimer = useRef<number | null>(null);
+  const rearm = useCallback(() => {
+    if (rearmTimer.current) window.clearTimeout(rearmTimer.current);
+    rearmTimer.current = window.setTimeout(() => setAnimating(true), 64);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (rearmTimer.current) window.clearTimeout(rearmTimer.current);
     },
     []
   );
@@ -143,18 +178,53 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
      Runs on the track's *own* transform transition only. Both the index and
      the "no transition" flag are committed together, so the correction lands
      in a single style recalculation and is never seen. */
+
+  /* Shift by whole clone-sets until the index is back inside the middle set.
+     Every set is the same products, so any such shift lands on the exact
+     frame already on screen — the correction can never be seen. Works for
+     indices that have drifted arbitrarily far, not just one set. */
+  const correctIndex = useCallback(
+    (prev: number) => {
+      let next = prev;
+      while (next >= count * 2) next -= count;
+      while (next < count) next += count;
+      return next;
+    },
+    [count]
+  );
+
   const handleTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
     if (event.target !== trackRef.current || event.propertyName !== "transform") return;
     if (count < 2) return;
 
-    if (index >= count * 2) {
+    if (index >= count * 2 || index < count) {
       setAnimating(false);
-      setIndex(index - count);
-    } else if (index < count) {
-      setAnimating(false);
-      setIndex(index + count);
+      setSuppressEnter(true);
+      setIndex(correctIndex);
+      rearm();
     }
   };
+
+  /* Watchdog — transitionend can be swallowed: a drag removes the transition
+     class mid-flight, or a throttled/frozen renderer suspends the animation
+     so the event never arrives while JS timers keep stepping autoplay. If
+     that happens the track walks past the clone sets and the stage renders
+     EMPTY. One transition-duration after any out-of-range index, snap back to
+     the same product with the transition disabled. Races are safe: if
+     transitionend corrects first, the index change cancels this timer; if
+     this fires first, disabling the transition cancels the pending event. */
+  useEffect(() => {
+    if (count < 2) return;
+    if (index >= count * 2 || index < count) {
+      const id = window.setTimeout(() => {
+        setAnimating(false);
+        setSuppressEnter(true);
+        setIndex(correctIndex);
+        rearm();
+      }, 760);
+      return () => window.clearTimeout(id);
+    }
+  }, [index, count, correctIndex, rearm]);
 
   /* ── Pointer drag ───────────────────────────────────────────────────────
      The offset lives in a ref and is written straight to a CSS variable, so a
@@ -224,20 +294,24 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
     }
   };
 
-  const jumpToDot = (dot: number) => {
+  const jumpForward = () => {
     pauseForInteraction();
-    const modulo = ((index % count) + count) % count;
-    const setBase = index - modulo;
-    goTo(setBase + dot);
+    step(1);
+  };
+  const jumpBack = () => {
+    pauseForInteraction();
+    step(-1);
   };
 
   if (slides.length === 0) return null;
 
   const activeDot = count > 0 ? ((index % count) + count) % count : 0;
+  const autoplayRunning =
+    count > 1 && !userPaused && inView && tabVisible && animating;
 
   return (
     <div
-      className="w-full max-w-[1080px] mx-auto mt-6 relative pb-2"
+      className="w-full max-w-[1240px] mx-auto mt-1 relative pb-2"
       onMouseEnter={pauseForInteraction}
       onMouseLeave={() => {
         endDrag();
@@ -247,46 +321,6 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
       aria-roledescription="carousel"
       aria-label="Featured products"
     >
-      {/* ── Arrows: minimal floating circles, kept inside the container until
-             there is genuinely room outside it. ── */}
-      <button
-        type="button"
-        onClick={() => {
-          pauseForInteraction();
-          step(-1);
-        }}
-        aria-label="Previous product"
-        className={`${styles.arrow} tap-flat hidden md:flex absolute top-[calc(50%-16px)] left-0 xl:-left-14 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 rounded-full border transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-105 active:scale-95 group`}
-        style={{
-          background: "color-mix(in srgb, var(--surface) 55%, transparent)",
-          borderColor: "var(--border-subtle)",
-        }}
-      >
-        <ChevronLeft
-          size={18}
-          className="transition-transform duration-200 group-hover:-translate-x-0.5"
-        />
-      </button>
-
-      <button
-        type="button"
-        onClick={() => {
-          pauseForInteraction();
-          step(1);
-        }}
-        aria-label="Next product"
-        className={`${styles.arrow} tap-flat hidden md:flex absolute top-[calc(50%-16px)] right-0 xl:-right-14 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 rounded-full border transition-[transform,border-color,background-color] duration-200 ease-[cubic-bezier(.22,1,.36,1)] hover:scale-105 active:scale-95 group`}
-        style={{
-          background: "color-mix(in srgb, var(--surface) 55%, transparent)",
-          borderColor: "var(--border-subtle)",
-        }}
-      >
-        <ChevronRight
-          size={18}
-          className="transition-transform duration-200 group-hover:translate-x-0.5"
-        />
-      </button>
-
       {/* ── Track ── */}
       <div
         ref={viewportRef}
@@ -314,11 +348,12 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
             const content = productContent[product.slug];
             const coverImage = product.coverImageUrl || content?.image;
             const isReal = i >= count && i < count * 2;
+            const slideNo = String((i % count) + 1).padStart(2, "0");
 
             return (
               <div
                 key={`${product.id}-${i}`}
-                className={`${styles.slide} ${animating && i === index ? styles.isActive : ""}`}
+                className={`${styles.slide} ${animating && i === index && !suppressEnter ? styles.isActive : ""}`}
                 aria-hidden={!isReal}
               >
                 <Link
@@ -335,58 +370,65 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
                   className={`${styles.compose} tap-flat group`}
                   aria-label={`${product.name} — PKR ${product.price.toFixed(0)}`}
                 >
-                  {/* ── PRODUCT VISUAL — floats over atmospheric light ── */}
+                  {/* ── PRODUCT STAGE — lit artwork, open corners, no card ── */}
                   <div className={styles.visual}>
-                    <div className={styles.rail} aria-hidden />
-                    {coverImage ? (
-                      <Image
-                        src={coverImage}
-                        alt=""
-                        fill
-                        draggable={false}
-                        className={styles.visualImg}
-                        sizes="(max-width: 640px) 55vw, 260px"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Icon
-                        size={64}
-                        className={styles.visualIcon}
-                        style={{
-                          filter: isCrimson
-                            ? "drop-shadow(0 0 18px rgba(255,45,85,0.35))"
-                            : "drop-shadow(0 0 18px rgba(77,163,255,0.4))",
-                        }}
-                      />
-                    )}
+                    <span className={styles.corners} aria-hidden />
+                    <div className={styles.stage}>
+                      {coverImage ? (
+                        <Image
+                          src={coverImage}
+                          alt=""
+                          fill
+                          draggable={false}
+                          className={styles.visualImg}
+                          sizes="(max-width: 640px) 70vw, 480px"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Icon
+                          size={64}
+                          className={styles.visualIcon}
+                          style={{
+                            filter: isCrimson
+                              ? "drop-shadow(0 0 18px rgba(255,45,85,0.35))"
+                              : "drop-shadow(0 0 18px rgba(77,163,255,0.4))",
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Signature data rail — real data only */}
+                    <span className={styles.dataRail} aria-hidden>
+                      <span className={styles.dataNum}>{slideNo}</span>
+                      <span className={styles.dataLine} />
+                      <span className={styles.dataLabel}>
+                        {content?.durationLabel || badge}
+                      </span>
+                    </span>
                   </div>
 
-                  {/* ── INFO — typographic hierarchy, no panels ── */}
+                  {/* ── INFO — editorial hierarchy, no panels ── */}
                   <div className={styles.info}>
-                    <span className={`${styles.infoBadge} ${isCrimson ? styles.crimson : ""}`}>
+                    <span className={`${styles.infoBadge} ${isCrimson ? styles.crimsonTone : ""}`}>
                       {badge}
                     </span>
 
                     <h3 className={styles.infoTitle}>{product.name}</h3>
 
-                    <p className={styles.infoDesc}>
-                      {product.description || "Premium digital product and access."}
-                    </p>
+                    <p className={styles.infoDesc}>{excerpt(product.description)}</p>
 
                     <div className={styles.infoMeta}>
                       <div className={styles.price}>
                         <span className={styles.priceLabel}>Price</span>
                         <span className={styles.priceValue}>
-                          PKR {product.price.toFixed(0)}
+                          PKR {product.price.toLocaleString("en-US")}
                         </span>
                       </div>
 
-                      <span
-                        className={`${styles.cta} ${isCrimson ? styles.crimson : ""} sheen`}
-                      >
+                      <span className={`${styles.cta} ${isCrimson ? styles.crimsonCta : ""}`}>
                         <span className="relative z-10 flex items-center gap-1.5">
                           VIEW
-                          <ArrowRight size={13} className={styles.ctaArrow} />
+                          <ArrowRight size={14} className={styles.ctaArrow} />
                         </span>
                       </span>
                     </div>
@@ -398,32 +440,49 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
         </div>
       </div>
 
-      {/* ── HUD: counter + minimal dots ── */}
+      {/* ── HUD: counter + animated autoplay rail + compact arrows, all
+             belonging to the composition (never at viewport edges) ── */}
       {count > 1 && (
         <div className={styles.hud}>
-          <span className={styles.counter} aria-hidden>
-            <span className={styles.counterStrong}>
-              {String(activeDot + 1).padStart(2, "0")}
+          <div className={styles.hudProgress}>
+            <span className={styles.counter} aria-hidden>
+              <span className={styles.counterStrong}>
+                {String(activeDot + 1).padStart(2, "0")}
+              </span>
+              <span className={styles.counterDim}>
+                {" / "}
+                {String(count).padStart(2, "0")}
+              </span>
             </span>
-            {" / "}
-            {String(count).padStart(2, "0")}
-          </span>
-          <div className="flex items-center gap-1.5" role="tablist" aria-label="Slide position">
-            {baseProducts.map((_, i) => {
-              const isActive = activeDot === i;
-              return (
-                <button
-                  type="button"
-                  key={i}
-                  onClick={() => jumpToDot(i)}
-                  aria-label={`Go to product ${i + 1}`}
-                  aria-current={isActive}
-                  className={styles.dot}
-                >
-                  <span className={`${styles.dotInner} ${isActive ? styles.active : ""}`} />
-                </button>
-              );
-            })}
+            <span className={styles.railTrack} aria-hidden>
+              <span
+                key={`${index}-${autoplayRunning ? "run" : "hold"}`}
+                className={styles.railFill}
+                style={{
+                  animationDuration: `${AUTOPLAY_MS}ms`,
+                  animationPlayState: autoplayRunning ? "running" : "paused",
+                }}
+              />
+            </span>
+          </div>
+
+          <div className={styles.hudNav}>
+            <button
+              type="button"
+              onClick={jumpBack}
+              aria-label="Previous product"
+              className={`${styles.arrow} tap-flat`}
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={jumpForward}
+              aria-label="Next product"
+              className={`${styles.arrow} tap-flat`}
+            >
+              <ChevronRight size={17} />
+            </button>
           </div>
         </div>
       )}
