@@ -377,8 +377,9 @@ export async function saveSettings(formData: FormData) {
 }
 
 /**
- * Bulk-import Free Panel keys. Trims, dedupes, skips lines already stored.
- * Never crashes on a bad line — invalid entries are counted and skipped.
+ * Bulk-import Free Panel keys. Trims, normalizes, dedupes, skips lines already
+ * stored. Accepts the owner's 6x6 format (XXXXXX-…-XXXXXX) and any sensible
+ * key string; badly formatted lines are counted and skipped.
  */
 export async function importFreePanelKeys(formData: FormData): Promise<void> {
   try {
@@ -386,15 +387,20 @@ export async function importFreePanelKeys(formData: FormData): Promise<void> {
     const batchNotes = (formData.get("notes") as string | null)?.trim() || null;
     const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
+    // Sensible key shape: uppercase alphanumeric groups separated by dashes.
+    const KEY_FORMAT = /^[A-Z0-9]{4,8}(-[A-Z0-9]{4,8})+$/;
+
     // Dedupe within the paste itself
     const seen = new Set<string>();
     const candidates: string[] = [];
     let duplicatesInPaste = 0;
-    for (const line of lines) {
+    let invalid = 0;
+    for (const rawLine of lines) {
+      // Normalize: unify case, strip accidental spaces around/inside the key
+      const line = rawLine.toUpperCase().replace(/\s+/g, "");
       if (seen.has(line)) { duplicatesInPaste++; continue; }
+      if (!KEY_FORMAT.test(line) || line.length < 4 || line.length > 64) { invalid++; continue; }
       seen.add(line);
-      // Sensible length validation: 4–64 chars
-      if (line.length < 4 || line.length > 64) continue;
       candidates.push(line);
     }
 
@@ -416,16 +422,70 @@ export async function importFreePanelKeys(formData: FormData): Promise<void> {
     }
 
     const skipped = duplicatesInPaste + dbDuplicates;
-    const result = { submitted: lines.length, imported: toInsert.length, skipped };
+    const result = { submitted: lines.length, imported: toInsert.length, skipped, invalid };
     // Surface result via redirect query param
     const { redirect } = await import("next/navigation");
     revalidatePath("/mkpanelzoneadmin/free-panel");
-    redirect(`/mkpanelzoneadmin/free-panel?imported=${result.imported}&skipped=${result.skipped}&submitted=${result.submitted}`);
+    redirect(`/mkpanelzoneadmin/free-panel?imported=${result.imported}&skipped=${result.skipped}&submitted=${result.submitted}&invalid=${result.invalid}`);
   } catch (error) {
+    // redirect() itself throws NEXT_REDIRECT; re-throw so a SUCCESS redirect
+    // is never caught here and misreported as an import failure.
+    if ((error as any)?.digest?.startsWith("NEXT_REDIRECT")) throw error;
     console.error("importFreePanelKeys failed:", error);
     const { redirect } = await import("next/navigation");
     redirect("/mkpanelzoneadmin/free-panel?error=import");
   }
+}
+
+/**
+ * Generate owner-format Free Panel keys: 6 groups of 6 characters from a
+ * 32-symbol alphabet (no 0/O/1/I to keep keys readable over WhatsApp).
+ * Uniqueness is enforced against the DB (keyValue is unique); a retry loop
+ * covers the astronomically unlikely collision case.
+ */
+const KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generateOwnerFormatKey(): string {
+  const group = () =>
+    Array.from(randomBytes(6))
+      .map((b) => KEY_ALPHABET[b % KEY_ALPHABET.length])
+      .join("");
+  return Array.from({ length: 6 }, group).join("-");
+}
+
+export async function generateFreePanelKeys(formData: FormData): Promise<void> {
+  let inserted = 0;
+  let count = 10;
+  try {
+    count = Math.min(Math.max(Number(formData.get("count") ?? 10) || 10, 1), 500);
+    const batchNotes = (formData.get("notes") as string | null)?.trim() || null;
+
+    const batchId = randomBytes(6).toString("hex");
+    let guard = 0;
+
+    while (inserted < count && guard < count * 5) {
+      guard++;
+      const keyValue = generateOwnerFormatKey();
+      try {
+        await prisma.freePanelKey.create({
+          data: { keyValue, batchId, notes: batchNotes ?? "Generated — owner format" },
+        });
+        inserted++;
+      } catch {
+        // Unique violation on the 1-in-billions collision — just draw again.
+      }
+    }
+
+    revalidatePath("/mkpanelzoneadmin/free-panel");
+  } catch (error) {
+    console.error("generateFreePanelKeys failed:", error);
+    const { redirect } = await import("next/navigation");
+    redirect("/mkpanelzoneadmin/free-panel?error=generate");
+  }
+  // redirect() throws NEXT_REDIRECT — it must run OUTSIDE try/catch so the
+  // success redirect is never swallowed and misreported as a failure.
+  const { redirect } = await import("next/navigation");
+  redirect(`/mkpanelzoneadmin/free-panel?generated=${inserted}&requested=${count}`);
 }
 
 /** Disable or re-enable selected keys (owner action from inventory list). */

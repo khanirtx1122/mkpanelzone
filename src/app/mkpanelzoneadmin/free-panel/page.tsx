@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getFreePanelConfig, FREE_PANEL_DEFAULTS } from "@/lib/freePanel";
-import { saveFreePanelConfig, importFreePanelKeys, setFreePanelKeyStatus } from "../actions";
-import { Save, Gift, KeyRound, Plus, Ban, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { saveFreePanelConfig, importFreePanelKeys, setFreePanelKeyStatus, generateFreePanelKeys } from "../actions";
+import { Save, Gift, KeyRound, Plus, Ban, RotateCcw, AlertTriangle, CheckCircle2, Sparkles, KeySquare } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { AdminSubmitButton } from "@/components/admin/AdminButton";
+import { FreePanelResultToasts } from "./FreePanelForms";
 
 export default async function FreePanelSettingsPage(props: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -30,7 +33,12 @@ export default async function FreePanelSettingsPage(props: {
 
   const importResult =
     searchParams.imported != null
-      ? { imported: Number(searchParams.imported), skipped: Number(searchParams.skipped ?? 0), submitted: Number(searchParams.submitted ?? 0) }
+      ? { imported: Number(searchParams.imported), skipped: Number(searchParams.skipped ?? 0), submitted: Number(searchParams.submitted ?? 0), invalid: Number(searchParams.invalid ?? 0) }
+      : null;
+
+  const generateResult =
+    searchParams.generated != null
+      ? { generated: Number(searchParams.generated), requested: Number(searchParams.requested ?? 0) }
       : null;
 
   const stats = [
@@ -54,6 +62,8 @@ export default async function FreePanelSettingsPage(props: {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      <Suspense fallback={null}><FreePanelResultToasts /></Suspense>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -82,11 +92,28 @@ export default async function FreePanelSettingsPage(props: {
           {importResult.skipped > 0 && (
             <span className="text-brand-ink-3">· {importResult.skipped} duplicates skipped (of {importResult.submitted} submitted)</span>
           )}
+          {importResult.invalid > 0 && (
+            <span className="text-orange-400">· {importResult.invalid} invalid format skipped</span>
+          )}
         </div>
       )}
       {searchParams.error === "import" && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-red-500/5 border-red-500/20 text-sm text-red-400">
           <AlertTriangle size={16} /> Import failed — please check the input and try again.
+        </div>
+      )}
+      {searchParams.error === "generate" && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-red-500/5 border-red-500/20 text-sm text-red-400">
+          <AlertTriangle size={16} /> Key generation failed — please try again.
+        </div>
+      )}
+      {generateResult && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-green-500/5 border-green-500/20 text-sm">
+          <Sparkles size={16} className="text-brand-blue-400 shrink-0" />
+          <span className="text-white font-bold">{generateResult.generated} keys generated</span>
+          {generateResult.generated < generateResult.requested && (
+            <span className="text-brand-ink-3">· {generateResult.requested - generateResult.generated} skipped (rare collision)</span>
+          )}
         </div>
       )}
 
@@ -143,12 +170,9 @@ export default async function FreePanelSettingsPage(props: {
               {field("endDate", "End Date", cfg.endDate ? cfg.endDate.slice(0, 16) : "", { type: "datetime-local" })}
             </div>
             <input type="hidden" name="popupFrequency" value={cfg.popupFrequency} />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-[background-color,transform] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-brand-blue-400"
-            >
-              <Save size={16} /> Save Settings
-            </button>
+            <AdminSubmitButton label="Save Settings" pendingLabel="Saving…" successLabel="Saved">
+              <Save size={16} />
+            </AdminSubmitButton>
           </form>
         </div>
 
@@ -165,17 +189,51 @@ export default async function FreePanelSettingsPage(props: {
 
           <div className="bg-[#0E1420] border border-white/5 rounded-xl p-5">
             <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
+              <Sparkles size={16} className="text-brand-blue-400" /> Generate Keys
+            </h2>
+            <p className="text-xs text-brand-ink-3 mb-3">
+              Auto-generate keys in the owner format:
+              <span className="font-mono text-brand-blue-400"> XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX</span>
+            </p>
+            <form action={generateFreePanelKeys} className="space-y-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  name="count"
+                  min={1}
+                  max={500}
+                  defaultValue={25}
+                  required
+                  className="w-24 bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50"
+                />
+                <span className="text-xs text-brand-ink-3">keys (1–500)</span>
+              </div>
+              <input
+                type="text"
+                name="notes"
+                placeholder="Batch note (optional) — e.g. November drop"
+                className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50"
+              />
+              <AdminSubmitButton variant="secondary" label="Generate Keys" pendingLabel="Generating…" successLabel="Generated" className="w-full">
+                <Sparkles size={16} />
+              </AdminSubmitButton>
+            </form>
+          </div>
+
+          <div className="bg-[#0E1420] border border-white/5 rounded-xl p-5">
+            <h2 className="text-base font-bold text-white flex items-center gap-2 mb-1">
               <KeyRound size={16} className="text-brand-blue-400" /> Bulk Add Keys
             </h2>
             <p className="text-xs text-brand-ink-3 mb-3">
-              Paste keys — one per line. Duplicates are skipped automatically.
+              Paste keys — one per line. Owner format
+              <span className="font-mono"> XXXXXX-…-XXXXXX</span> or similar. Duplicates skipped.
             </p>
             <form action={importFreePanelKeys} className="space-y-3">
               <textarea
                 name="keys"
                 rows={7}
                 required
-                placeholder={"KEY-001-XXXX\nKEY-002-XXXX\nKEY-003-XXXX"}
+                placeholder={"A1B2C3-D4E5F6-G7H8J9-K2L3M4-N5P6Q7-R8S9T2\nB2C3D4-E5F6G7-H8J9K2-L3M4N5-P6Q7R8-S9T2U3"}
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-blue-500/50"
               />
               <input
@@ -184,12 +242,9 @@ export default async function FreePanelSettingsPage(props: {
                 placeholder="Batch note (optional) — e.g. October release"
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50"
               />
-              <button
-                type="submit"
-                className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-[background-color,transform] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-brand-blue-400"
-              >
-                <Plus size={16} /> Import Keys
-              </button>
+              <AdminSubmitButton label="Import Keys" pendingLabel="Importing…" successLabel="Imported" className="w-full">
+                <Plus size={16} />
+              </AdminSubmitButton>
             </form>
           </div>
         </div>
@@ -202,11 +257,52 @@ export default async function FreePanelSettingsPage(props: {
           <span className="text-xs text-brand-ink-3 font-mono">latest {recentKeys.length} of {total} · disabled: {disabled}</span>
         </div>
         {recentKeys.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-brand-ink-3">
-            No keys yet. Import a batch to activate the offer.
-          </p>
+          <div className="px-5 py-10 text-center">
+            <KeySquare size={28} className="mx-auto text-brand-ink-3 mb-3" />
+            <p className="text-sm font-bold text-white">No keys yet</p>
+            <p className="text-xs text-brand-ink-3 mt-1 mb-4">Add a key batch to activate the Free Panel offer.</p>
+            <Link href="#" className="hidden">Add keys</Link>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile: card list */}
+          <div className="md:hidden divide-y divide-white/5">
+            {recentKeys.map((k) => (
+              <div key={k.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm text-white truncate">{maskKey(k.keyValue)}</p>
+                  <span className={`inline-flex mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase border ${
+                    k.status === "AVAILABLE"
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      : k.status === "ASSIGNED"
+                      ? "bg-green-500/10 text-green-400 border-green-500/20"
+                      : "bg-brand-ink-3/10 text-brand-ink-3 border-brand-ink-3/20"
+                  }`}>
+                    {k.status}
+                  </span>
+                </div>
+                {k.status !== "ASSIGNED" && (
+                  <form action={setFreePanelKeyStatus} className="inline shrink-0">
+                    <input type="hidden" name="keyId" value={k.id} />
+                    <input type="hidden" name="status" value={k.status === "AVAILABLE" ? "DISABLED" : "AVAILABLE"} />
+                    <AdminSubmitButton
+                      variant={k.status === "AVAILABLE" ? "danger" : "secondary"}
+                      label={k.status === "AVAILABLE" ? "Disable" : "Enable"}
+                      pendingLabel="Working…"
+                      successLabel="Done"
+                      successHoldMs={800}
+                      className="!px-3 !py-2 min-h-[44px]"
+                    >
+                      {k.status === "AVAILABLE" ? <Ban size={12} /> : <RotateCcw size={12} />}
+                    </AdminSubmitButton>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/5 bg-black/40">
@@ -239,22 +335,21 @@ export default async function FreePanelSettingsPage(props: {
                     </td>
                     <td className="px-5 py-3 text-xs text-brand-ink-3 hidden lg:table-cell">
                       {k.assignedAt ? k.assignedAt.toLocaleDateString() : "—"}
-                    </td>
-                    <td className="px-5 py-3 text-right">
+                    </td>                    <td className="px-5 py-3 text-right">
                       {k.status !== "ASSIGNED" && (
                         <form action={setFreePanelKeyStatus} className="inline">
                           <input type="hidden" name="keyId" value={k.id} />
                           <input type="hidden" name="status" value={k.status === "AVAILABLE" ? "DISABLED" : "AVAILABLE"} />
-                          <button
-                            type="submit"
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded border transition-[background-color,transform] active:scale-95 ${
-                              k.status === "AVAILABLE"
-                                ? "text-red-400 bg-red-500/10 hover:bg-red-500/20 border-red-500/20"
-                                : "text-brand-ink-2 bg-white/5 hover:bg-white/10 border-white/10"
-                            }`}
+                          <AdminSubmitButton
+                            variant={k.status === "AVAILABLE" ? "danger" : "secondary"}
+                            label={k.status === "AVAILABLE" ? "Disable" : "Enable"}
+                            pendingLabel="Working…"
+                            successLabel="Done"
+                            successHoldMs={800}
+                            className="!px-3 !py-1.5 !text-[10px]"
                           >
-                            {k.status === "AVAILABLE" ? <><Ban size={12} /> Disable</> : <><RotateCcw size={12} /> Enable</>}
-                          </button>
+                            {k.status === "AVAILABLE" ? <Ban size={12} /> : <RotateCcw size={12} />}
+                          </AdminSubmitButton>
                         </form>
                       )}
                     </td>
@@ -263,6 +358,7 @@ export default async function FreePanelSettingsPage(props: {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
