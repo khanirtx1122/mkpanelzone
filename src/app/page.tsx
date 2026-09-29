@@ -32,7 +32,7 @@ export default async function Home() {
       <FeaturedProductsSection products={featuredProducts as any} />
 
       {/* 4. Stats strip */}
-      <section className="py-12 sm:py-14 border-y border-border-subtle bg-surface/40">
+      <section className="py-12 sm:py-14 border-y border-border-subtle bg-surface/40" data-analytics-section="trust_stats">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-3 gap-3 sm:gap-6">
           {[
             { value: "5K+", label: "Active Members", Icon: Users },
@@ -55,7 +55,7 @@ export default async function Home() {
       </section>
 
       {/* 5. Benefits */}
-      <section className="py-14 sm:py-20 relative bg-surface/30 border-b border-border-subtle">
+      <section className="py-14 sm:py-20 relative bg-surface/30 border-b border-border-subtle" data-analytics-section="why_choose_us">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-10 sm:mb-14">
             <p className="text-[10px] font-bold tracking-[0.18em] text-brand-ink-3 uppercase mb-3">
@@ -112,7 +112,7 @@ export default async function Home() {
       </section>
 
       {/* 6. Customer Access CTA */}
-      <section className="py-16 sm:py-24 relative overflow-hidden">
+      <section className="py-16 sm:py-24 relative overflow-hidden" data-analytics-section="customer_access">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(47,95,208,0.07)_0%,_transparent_60%)] pointer-events-none" />
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center relative z-10">
           <p className="text-[10px] font-bold tracking-[0.18em] text-brand-ink-3 uppercase mb-4">
@@ -127,6 +127,7 @@ export default async function Home() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-xs mx-auto sm:max-w-none">
             <Link
               href="/products"
+              data-analytics-click="cta:view_products"
               className="w-full sm:w-auto inline-flex items-center justify-center h-12 px-6 rounded-[12px] font-bold tracking-[0.05em] uppercase text-white transition-all active:scale-[0.975]"
               style={{
                 background: "linear-gradient(135deg,#1E3FA8,#2F5FD0)",

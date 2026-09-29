@@ -78,9 +78,9 @@ model CustomerDevice {
 }
 
 model Product {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  name        String
+  id                 String   @id @default(uuid())
+  slug               String   @unique
+  name               String
   description        String?
   price              Float
   active             Boolean  @default(true)
@@ -94,7 +94,7 @@ model Product {
   videoEnabled       Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
-  orders      Order[]
+  orders             Order[]
 }
 
 model Order {
@@ -145,55 +145,139 @@ model Announcement {
 }
 
 model Popup {
-  id          String    @id @default(uuid())
-  title       String
-  message     String
-  imageUrl    String?
-  buttonText  String?
-  buttonLink  String?
-  scope       String    @default("ALL")
-  frequency   String    @default("ONCE_PER_SESSION")
-  active      Boolean   @default(true)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(uuid())
+  title      String
+  message    String
+  imageUrl   String?
+  buttonText String?
+  buttonLink String?
+  scope      String    @default("ALL")
+  frequency  String    @default("ONCE_PER_SESSION")
+  active     Boolean   @default(true)
+  startDate  DateTime?
+  endDate    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 /// Owner-configured promotion: MK FREE PC PANEL (5-day trial claim system).
 /// Stored as a single SiteSetting KV row (JSON) — no schema changes needed for copy tweaks.
 /// FreeClaim rows track individual visitor claims; keys are issued server-side only.
 model FreeClaim {
-  id            String    @id @default(uuid())
+  id           String        @id @default(uuid())
   /// Random opaque token identifying this claim in the visitor's session.
-  claimToken    String    @unique
+  claimToken   String        @unique
   /// Server-generated access key (plaintext, same storage pattern as PackageResource.secret)
-  key           String    @unique
-  platform      String    @default("PC")
-  durationDays  Int       @default(5)
+  key          String        @unique
+  platform     String        @default("PC")
+  durationDays Int           @default(5)
   /// Steps completed at claim time, e.g. "whatsapp,youtube,discord"
-  stepsDone     String    @default("")
-  status        String    @default("ACTIVE")
-  expiresAt     DateTime
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  panelKey      FreePanelKey?
+  stepsDone    String        @default("")
+  status       String        @default("ACTIVE")
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  panelKey     FreePanelKey?
+}
+
+/// ──────────────────────────────────────────────────────────────────────
+/// FIRST-PARTY WEBSITE ANALYTICS
+/// Anonymous, cookie-scoped visitor identity → sessions → events.
+/// No personal data, no fingerprints, no form contents, no full IP.
+/// ──────────────────────────────────────────────────────────────────────
+
+/// Anonymous visitor. `anonymousId` is a random first-party token issued by
+/// the browser (UUID). It is never derived from IP/device/hardware traits.
+model AnalyticsVisitor {
+  id             String   @id @default(uuid())
+  anonymousId    String   @unique @map("anonymous_visitor_id")
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at")
+  firstReferrer  String?  @map("first_referrer")
+  lastReferrer   String?  @map("last_referrer")
+  deviceCategory String   @default("unknown") @map("device_category")
+  deviceName     String?  @map("device_name")
+  osName         String?  @map("os_name")
+  browserName    String?  @map("browser_name")
+  isBot          Boolean  @default(false) @map("is_bot")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  sessions AnalyticsSession[]
+  events   AnalyticsEvent[]
+
+  @@index([lastSeenAt])
+  @@index([firstSeenAt])
+  @@map("analytics_visitors")
+}
+
+/// A visit. A new session starts after ~30 minutes of inactivity.
+/// `currentSection` holds the last meaningfully visible section key.
+model AnalyticsSession {
+  id             String    @id @default(uuid())
+  sessionKey     String    @unique @map("session_id")
+  visitorId      String    @map("visitor_id")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at")
+  endedAt        DateTime? @map("ended_at")
+  pageViewCount  Int       @default(0) @map("page_view_count")
+  entryPath      String    @map("entry_path")
+  lastPath       String    @map("last_path")
+  currentSection String?   @map("current_section")
+  deviceCategory String    @default("unknown") @map("device_category")
+  deviceName     String?   @map("device_name")
+  osName         String?   @map("os_name")
+  browserName    String?   @map("browser_name")
+  referrer       String?   @map("referrer")
+  isBot          Boolean   @default(false) @map("is_bot")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  visitor AnalyticsVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  events  AnalyticsEvent[]
+
+  @@index([lastSeenAt])
+  @@index([startedAt])
+  @@index([visitorId])
+  @@map("analytics_sessions")
+}
+
+/// Controlled event log — only three event types are ever written:
+/// page_view | section_view | important_click.
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  visitorId  String   @map("visitor_id")
+  sessionId  String   @map("session_id")
+  eventType  String   @map("event_type")
+  pagePath   String   @map("page_path")
+  sectionKey String?  @map("section_key")
+  targetKey  String?  @map("target_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  visitor AnalyticsVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session AnalyticsSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([eventType, createdAt])
+  @@index([pagePath])
+  @@index([visitorId])
+  @@index([sessionId])
+  @@map("analytics_events")
 }
 
 /// Owner-imported Free Panel key inventory. Assignment is atomic via a
 /// transactional updateMany on an AVAILABLE row — two concurrent claims can
 /// never receive the same key.
 model FreePanelKey {
-  id          String    @id @default(uuid())
-  keyValue    String    @unique
-  status      String    @default("AVAILABLE") // AVAILABLE | ASSIGNED | DISABLED
-  batchId     String?
-  notes       String?
-  claimId     String?   @unique
-  assignedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  claim       FreeClaim? @relation(fields: [claimId], references: [id])
+  id         String     @id @default(uuid())
+  keyValue   String     @unique
+  status     String     @default("AVAILABLE") // AVAILABLE | ASSIGNED | DISABLED
+  batchId    String?
+  notes      String?
+  claimId    String?    @unique
+  assignedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  claim      FreeClaim? @relation(fields: [claimId], references: [id])
 
   @@index([status])
   @@index([claimId])

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, UserPlus, Smartphone, Monitor } from "lucide-react";
+import { getAnalyticsSnapshot } from "@/lib/analyticsAdmin";
+import { AnalyticsOverview } from "@/components/admin/AnalyticsOverview";
 
 export const metadata = {
   title: "Dashboard | Owner Panel",
@@ -16,8 +18,10 @@ const getPlatformIcon = (platform: string) => {
   }
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboardPage() {
-  const [totalAgents, totalCustomers, customersByPlatform] = await Promise.all([
+  const [totalAgents, totalCustomers, customersByPlatform, analytics] = await Promise.all([
     prisma.agent.count({ where: { role: "AGENT" } }),
     prisma.customer.count(),
     prisma.customer.groupBy({
@@ -25,7 +29,9 @@ export default async function AdminDashboardPage() {
       _count: {
         platformType: true
       }
-    })
+    }),
+    // Real recorded traffic only — the dashboard renders zeros when empty.
+    getAnalyticsSnapshot(),
   ]);
 
   return (
@@ -81,6 +87,11 @@ export default async function AdminDashboardPage() {
             );
           })}
         </div>
+      </div>
+
+      {/* WEBSITE ANALYTICS — real first-party traffic only. */}
+      <div className="border-t border-white/5 pt-10">
+        <AnalyticsOverview initial={analytics} />
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { GlobalPopupProvider } from "@/components/providers/GlobalPopupProvider";
 import { FreePanelProvider } from "@/components/freepanel/FreePanelProvider";
+import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
 import Script from "next/script";
 const manrope = Manrope({
   subsets: ["latin"],
@@ -208,6 +209,8 @@ export default async function RootLayout({
             <Footer />
           </FreePanelProvider>
           <GlobalPopupProvider popups={activePopups} />
+          {/* First-party, anonymous website analytics (owner-only dashboard). */}
+          <AnalyticsTracker />
         </ThemeProvider>
       </body>
     </html>

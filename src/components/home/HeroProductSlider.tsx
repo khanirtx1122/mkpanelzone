@@ -320,6 +320,7 @@ export function HeroProductSlider({ products }: { products: Product[] }) {
       role="region"
       aria-roledescription="carousel"
       aria-label="Featured products"
+      data-analytics-section="hero_slider"
     >
       {/* ── Track ── */}
       <div

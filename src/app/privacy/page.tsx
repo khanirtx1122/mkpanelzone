@@ -33,7 +33,16 @@ export default function PrivacyPage() {
           and cannot be used to identify your specific hardware configuration outside of our authentication flow.
         </p>
 
-        <h2 className="text-xl font-extrabold text-foreground mb-4 mt-10 tracking-tight">3. Data Retention</h2>
+        <h2 className="text-xl font-extrabold text-foreground mb-4 mt-10 tracking-tight">3. Website Analytics</h2>
+        <p className="text-brand-ink-2 leading-relaxed mb-8 text-[15px]">
+          We use a lightweight first-party analytics system to understand which pages and sections of our website are
+          useful. It stores a random anonymous visitor ID in a first-party cookie, a session identifier, the pages and
+          sections viewed, and a broad device/OS/browser summary derived from your browser&apos;s user-agent. We do not
+          store your IP address, form contents, passwords, clipboard contents, or any hardware or browser fingerprint,
+          and this data is never shared with advertising networks.
+        </p>
+
+        <h2 className="text-xl font-extrabold text-foreground mb-4 mt-10 tracking-tight">4. Data Retention</h2>
         <p className="text-brand-ink-2 leading-relaxed mb-8 text-[15px]">
           We retain your order details and device hashes only as long as you maintain an active license with us. 
           We do not share, sell, or distribute your data to any third parties.

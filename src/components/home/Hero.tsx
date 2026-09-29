@@ -11,7 +11,7 @@ export async function Hero({ products }: { products: Product[] }) {
   const cta = await getHeroCta();
 
   return (
-    <section className="relative hero-bg overflow-x-hidden pt-[80px] sm:pt-[96px] pb-6 sm:pb-10">
+    <section className="relative hero-bg overflow-x-hidden pt-[80px] sm:pt-[96px] pb-6 sm:pb-10" data-analytics-section="hero">
       {/* Top edge accent */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-neon-blue/20 to-transparent pointer-events-none" />
 
@@ -23,6 +23,7 @@ export async function Hero({ products }: { products: Product[] }) {
           <Link
             href={cta.link}
             {...(cta.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            data-analytics-click="cta:hero"
             className="hero-cta group inline-flex items-center gap-2 pl-2.5 pr-2 h-[34px] mb-4 rounded-full border border-brand-blue-500/35 active:scale-[0.97] transition-transform duration-150 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2"
             style={{
               background:

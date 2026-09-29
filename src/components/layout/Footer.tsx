@@ -16,7 +16,7 @@ export function Footer() {
   }
 
   return (
-    <footer className="border-t border-border-subtle relative bg-background">
+    <footer className="border-t border-border-subtle relative bg-background" data-analytics-section="footer">
       {/* Premium neon top accent line */}
       <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-brand-neon-blue/25 to-transparent" />
 

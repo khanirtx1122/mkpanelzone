@@ -223,7 +223,7 @@ export function FeaturedProductsSection({ products }: { products: Product[] }) {
   if (!products?.length) return null;
 
   return (
-    <section className="relative bg-background pb-12 sm:pb-16 pt-3">
+    <section className="relative bg-background pb-12 sm:pb-16 pt-3" data-analytics-section="featured_products">
       {/* Separator */}
       <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "var(--border-subtle)" }} />
 

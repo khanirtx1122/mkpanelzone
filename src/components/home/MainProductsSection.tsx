@@ -107,7 +107,7 @@ export function MainProductsSection({ products }: { products: Product[] }) {
   if (!products || products.length === 0) return null;
 
   return (
-    <section className="py-12 sm:py-16 relative bg-background border-t border-border-subtle">
+    <section className="py-12 sm:py-16 relative bg-background border-t border-border-subtle" data-analytics-section="explore_products">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         
         <Reveal className="text-center mb-10 sm:mb-12">
