@@ -23,6 +23,8 @@ export type ActivityRow = { id: string; device: string; deviceCategory: string; 
 export type AnalyticsSnapshot = {
   generatedAt: string;
   hasData: boolean;
+  /** True when aggregation failed — the dashboard keeps its last good data. */
+  degraded?: boolean;
   /** First moment any real traffic was recorded — never backfilled. */
   trackingSince: string | null;
   stats: AnalyticsStat;
@@ -48,7 +50,57 @@ function shortVisitorRef(id: string): string {
   return `#${id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
 
+/** Zeroed snapshot — shown when no traffic exists, never seeded with fake data. */
+function emptySnapshot(degraded = false): AnalyticsSnapshot {
+  const now = new Date();
+  return {
+    generatedAt: now.toISOString(),
+    hasData: false,
+    degraded,
+    trackingSince: null,
+    stats: {
+      activeNow: 0,
+      todayVisitors: 0,
+      todaySessions: 0,
+      todayPageViews: 0,
+      visitors30d: 0,
+      totalVisitors: 0,
+      totalSessions: 0,
+      totalPageViews: 0,
+      returning30d: 0,
+      new30d: 0,
+      mobile30d: 0,
+      desktop30d: 0,
+    },
+    // An explicit all-zero 30-day series so the chart axis stays honest.
+    trend: Array.from({ length: 30 }, (_, index) => {
+      const day = new Date(now.getTime() - (29 - index) * 24 * 60 * 60 * 1000);
+      return { day: day.toISOString().slice(0, 10), visitors: 0, pageViews: 0 };
+    }),
+    devices: [],
+    operatingSystems: [],
+    browsers: [],
+    topPages: [],
+    topSections: [],
+    liveVisitors: [],
+    recentActivity: [],
+  };
+}
+
+/**
+ * Analytics must never be able to break the admin Overview: a failed query
+ * degrades to a zeroed snapshot instead of throwing.
+ */
 export async function getAnalyticsSnapshot(): Promise<AnalyticsSnapshot> {
+  try {
+    return await computeSnapshot();
+  } catch (error) {
+    console.error("[analytics] snapshot failed, showing zeros:", error);
+    return emptySnapshot(true);
+  }
+}
+
+async function computeSnapshot(): Promise<AnalyticsSnapshot> {
   const now = new Date();
   const presenceSince = new Date(now.getTime() - PRESENCE_WINDOW_MS);
   const since30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -178,6 +230,7 @@ export async function getAnalyticsSnapshot(): Promise<AnalyticsSnapshot> {
   return {
     generatedAt: now.toISOString(),
     hasData: lifetimeVisitors > 0 || lifetimeSessions > 0 || recentCount > 0,
+    degraded: false,
     trackingSince: firstVisitor?.firstSeenAt.toISOString() ?? null,
     stats: {
       activeNow,

@@ -19,7 +19,12 @@ export async function GET(req: NextRequest) {
     }
 
     const snapshot = await getAnalyticsSnapshot();
-    return NextResponse.json(snapshot, { headers: { "Cache-Control": "no-store" } });
+    // A degraded snapshot means the aggregation failed — tell the dashboard so
+    // it keeps its last good numbers instead of flashing zeros.
+    return NextResponse.json(snapshot, {
+      status: snapshot.degraded ? 503 : 200,
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
     console.error("[analytics] admin snapshot failed:", error);
     return NextResponse.json({ error: "Failed to load analytics" }, { status: 500 });
