@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { ChevronDown, Settings, Power, PowerOff, Loader2, CheckCircle2 } from "lucide-react";
 import { adminUpdateBranch, adminToggleBranchEnabled } from "../actions";
 import type { PlatformBranch } from "@prisma/client";
 
-export function BranchManager({ branch }: { branch: PlatformBranch }) {
+export function BranchManager({ branch, compact = false }: { branch: PlatformBranch; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,14 +38,14 @@ export function BranchManager({ branch }: { branch: PlatformBranch }) {
   };
 
   return (
-    <div className="border-b border-white/5 bg-black/20">
-      <div className="flex items-center justify-between px-4 py-3 gap-3">
+    <div className={`bg-black/20 ${compact ? "rounded-xl border border-white/5" : "border-b border-white/5"}`}>
+      <div className={`flex items-center justify-between gap-3 ${compact ? "px-3 py-2.5" : "px-4 py-3"}`}>
         <button
           onClick={() => setOpen(!open)}
           className="inline-flex items-center gap-2 text-sm font-bold text-white/80 hover:text-white transition-colors uppercase tracking-wider"
         >
           <Settings size={15} className="text-brand-blue-400" />
-          Branch settings — {branch.name}
+          <span className={compact ? "text-xs" : ""}>{compact ? "Settings" : `Branch settings — ${branch.name}`}</span>
           <ChevronDown size={15} className={`transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
         <button

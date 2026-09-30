@@ -49,6 +49,7 @@ model PlatformBranch {
 
   customers Customer[]
   resources PackageResource[]
+  packages  Package[]
 
   @@unique([platformType, slug])
 }
@@ -70,11 +71,13 @@ model Package {
   name               String
   description        String?
   platformType       String            @default("ANDROID")
+  branchId           String?
   isDefaultForAgents Boolean           @default(false)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   customers          Customer[]
   resources          PackageResource[]
+  branch             PlatformBranch?   @relation(fields: [branchId], references: [id])
 }
 
 model PackageResource {

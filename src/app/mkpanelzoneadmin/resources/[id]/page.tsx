@@ -1,18 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { DeleteResourceButton } from "../DeleteResourceButton";
 
 export default async function EditResourcePage(props: { 
   params: Promise<{ id: string }>,
-  searchParams?: Promise<{ packageId?: string, platform?: string, branchId?: string }>
+  searchParams?: Promise<{ packageId?: string, platform?: string, branchId?: string, returnTo?: string }>
 }) {
   const params = await props.params;
   const searchParams = await props.searchParams;
   const isNew = params.id === "new";
   const defaultPackageId = searchParams?.packageId || "";
   const platformFilter = searchParams?.platform || null;
+  const returnTo = searchParams?.returnTo === "all" ? "all" : "branch";
+  const backHref = returnTo === "all"
+    ? "/mkpanelzoneadmin/resources/all"
+    : "/mkpanelzoneadmin/resources";
 
   let resource = null;
   if (!isNew) {
@@ -81,10 +86,11 @@ export default async function EditResourcePage(props: {
         });
       }
       revalidatePath("/mkpanelzoneadmin/resources");
-      redirect("/mkpanelzoneadmin/resources");
+      revalidatePath("/mkpanelzoneadmin/resources/all");
+      redirect(backHref);
     } catch (error) {
       console.error(error);
-      redirect("/mkpanelzoneadmin/resources?error=failed");
+      redirect(`${backHref}?error=failed`);
     }
   }
 
@@ -94,17 +100,18 @@ export default async function EditResourcePage(props: {
     try {
       await prisma.packageResource.delete({ where: { id: params.id } });
       revalidatePath("/mkpanelzoneadmin/resources");
-      redirect("/mkpanelzoneadmin/resources");
+      revalidatePath("/mkpanelzoneadmin/resources/all");
+      redirect(backHref);
     } catch (error) {
       console.error(error);
-      redirect("/mkpanelzoneadmin/resources?error=failed");
+      redirect(`${backHref}?error=failed`);
     }
   }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-4">
-        <Link href="/mkpanelzoneadmin/resources" className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-brand-ink-3 hover:text-white">
+        <Link href={backHref} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-brand-ink-3 hover:text-white">
           <ArrowLeft size={20} />
         </Link>
         <div>
@@ -256,12 +263,7 @@ export default async function EditResourcePage(props: {
         <div className="pt-6 mt-6 border-t border-white/5 flex items-center justify-between">
           {!isNew ? (
             <form action={deleteResource}>
-              <button 
-                type="submit" 
-                className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg font-bold tracking-wider uppercase text-xs transition-colors"
-              >
-                <Trash2 size={16} /> Delete Resource
-              </button>
+              <DeleteResourceButton resource={resource?.name || "this resource"} />
             </form>
           ) : <div />}
           

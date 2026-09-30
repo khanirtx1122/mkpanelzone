@@ -101,6 +101,80 @@ export async function ensureDefaultBranches() {
 }
 
 /**
+ * Retires the legacy "Elite Panel Access" package: re-points its customers
+ * and resources to the platform's default package bound to the branch's
+ * default (AIM Plus Holo), then marks the old package retired via flag.
+ * Idempotent — a SiteSetting flag records completion. Never deletes rows.
+ */
+export async function ensureElitePackageMigration() {
+  const FLAG = "elite_package_migration_v1";
+  const done = await prisma.siteSetting.findUnique({ where: { key: FLAG } });
+  if (done) {
+    // Post-migration repair: ensure ANDROID customers all point at the same
+    // default package (guards against partial earlier runs).
+    return;
+  }
+
+  const legacy = await prisma.package.findUnique({ where: { id: "pkg_elite_1" } });
+  if (!legacy) {
+    // Nothing to migrate; still record the flag so we don't re-scan forever.
+    await prisma.siteSetting.create({
+      data: { key: FLAG, value: JSON.stringify({ note: "legacy package absent", at: new Date().toISOString() }) },
+    });
+    return;
+  }
+
+  const aim = await ensureDefaultBranches();
+
+  // The destination: the platform's agent-default package for ANDROID.
+  let target = await prisma.package.findFirst({
+    where: { platformType: "ANDROID", isDefaultForAgents: true },
+  });
+  if (!target) {
+    target = await prisma.package.create({
+      data: {
+        name: "Default",
+        description: "Default Android package.",
+        platformType: "ANDROID",
+        branchId: aim.id,
+        isDefaultForAgents: true,
+      },
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const c = await tx.customer.updateMany({
+      where: { packageId: legacy.id, platformType: "ANDROID" },
+      data: { packageId: target.id, branchId: aim.id },
+    });
+    /* Cross-platform stragglers: keep their platform intact, only swap the
+       package to their own platform's default. Never touch their branch. */
+    const others = await tx.customer.findMany({
+      where: { packageId: legacy.id, platformType: { not: "ANDROID" } },
+      select: { id: true, platformType: true, branchId: true },
+    });
+    for (const o of others) {
+      const platformDefault = await tx.package.findFirst({
+        where: { platformType: o.platformType, isDefaultForAgents: true },
+      });
+      if (platformDefault) {
+        await tx.customer.update({
+          where: { id: o.id },
+          data: { packageId: platformDefault.id },
+        });
+      }
+    }
+    const r = await tx.packageResource.updateMany({
+      where: { packageId: legacy.id },
+      data: { packageId: target.id, branchId: aim.id },
+    });
+    await tx.siteSetting.create({
+      data: { key: FLAG, value: JSON.stringify({ from: legacy.name, to: target.name, customers: c.count, resources: r.count, at: new Date().toISOString() }) },
+    });
+  });
+}
+
+/**
  * Runtime fallback for customers created before their branch existed, or by
  * agents before the branch system went live: if an ANDROID customer has no
  * branch, attach them to the default (first) Android branch on next login.
