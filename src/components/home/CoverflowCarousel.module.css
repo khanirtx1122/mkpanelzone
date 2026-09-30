@@ -1,0 +1,571 @@
+/*
+ * MK PANEL ZONE — 3D COVERFLOW
+ * ========================================================================
+ * The cards float free in the hero: no giant glass rectangle wrapping the
+ * carousel, only ambient cobalt illumination, a whisper of a floor shadow
+ * and the 3D transforms themselves.
+ *
+ * Geometry (--cf-w / --cf-h / --cf-perspective / --cf-radius) is measured in
+ * JS and written to the stage's inline style; the values here are SSR
+ * defaults so the first paint is already the right shape.
+ */
+
+/* While a drag is in flight the whole document stops selecting text, so a
+   fast flick never highlights the page around the carousel. */
+:global(html.cf-dragging),
+:global(html.cf-dragging) * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.root {
+  position: relative;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  outline: none;
+}
+.root:focus-visible {
+  outline: 2px solid var(--color-brand-neon-blue, #4da3ff);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden; /* clips the horizontal spill of the 3D fan */
+}
+
+/* ── Atmosphere — depth without hiding the transform ─────────────────── */
+.atmosphere {
+  position: absolute;
+  inset: -4% -2% 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 48% 62% at 50% 46%,
+    rgba(47, 95, 208, 0.28) 0%,
+    rgba(47, 95, 208, 0.1) 42%,
+    transparent 70%
+  );
+}
+[data-theme="light"] .atmosphere {
+  background: radial-gradient(
+    ellipse 48% 62% at 50% 46%,
+    rgba(47, 95, 208, 0.13) 0%,
+    rgba(47, 95, 208, 0.05) 42%,
+    transparent 70%
+  );
+}
+
+/* ── Stage: the perspective container ────────────────────────────────── */
+.stage {
+  --cf-w: 200px;
+  --cf-h: 220px;
+  --cf-perspective: 600px;
+  --cf-radius: 20px;
+  --cf-pad-y: clamp(16px, 2.6vw, 30px);
+
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: calc(var(--cf-h) + 2 * var(--cf-pad-y));
+  perspective: var(--cf-perspective);
+  perspective-origin: 50% 50%;
+  touch-action: pan-y; /* horizontal gesture = carousel, vertical = page */
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+/* Grounded shadow so the fan feels like it occupies space — not a platform */
+.floor {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--cf-pad-y) + 6px);
+  transform: translateX(-50%);
+  width: calc(var(--cf-w) * 1.45);
+  height: clamp(16px, 3.4vw, 34px);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(2, 6, 18, 0.5) 0%,
+    rgba(2, 6, 18, 0.2) 45%,
+    transparent 72%
+  );
+}
+[data-theme="light"] .floor {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(15, 23, 42, 0.16) 0%,
+    rgba(15, 23, 42, 0.06) 45%,
+    transparent 72%
+  );
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--cf-w);
+  height: var(--cf-h);
+  margin-left: calc(var(--cf-w) / -2);
+  margin-top: calc(var(--cf-h) / -2);
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform-origin: 50% 50%;
+}
+
+.cardInner {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--cf-radius);
+  overflow: hidden;
+  background: linear-gradient(158deg, #17223a 0%, #0c1424 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow:
+    0 14px 28px rgba(2, 6, 18, 0.5),
+    0 3px 8px rgba(2, 6, 18, 0.34);
+  transition:
+    box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-theme="light"] .cardInner {
+  background: linear-gradient(158deg, #ffffff 0%, #eaf0fa 100%);
+  border-color: rgba(47, 95, 208, 0.18);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.14),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+/* Tiny crimson reflected detail — one soft corner, never a border */
+.cardInner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 88% 94%,
+    rgba(179, 18, 47, 0.22),
+    transparent 44%
+  );
+}
+.card[data-tone="red"] .cardInner::before {
+  background: radial-gradient(circle at 12% 94%, rgba(179, 18, 47, 0.26), transparent 46%);
+}
+.card[data-tone="neutral"] .cardInner::before {
+  background: radial-gradient(circle at 88% 94%, rgba(148, 163, 184, 0.16), transparent 44%);
+}
+[data-theme="light"] .cardInner::before {
+  background: radial-gradient(circle at 88% 94%, rgba(179, 18, 47, 0.1), transparent 44%);
+}
+[data-theme="light"] .card[data-tone="red"] .cardInner::before {
+  background: radial-gradient(circle at 12% 94%, rgba(179, 18, 47, 0.12), transparent 46%);
+}
+[data-theme="light"] .card[data-tone="neutral"] .cardInner::before {
+  background: radial-gradient(circle at 88% 94%, rgba(100, 116, 139, 0.09), transparent 44%);
+}
+
+/* Active emphasis — stronger edge + shadow, no dramatic scaling */
+.card[data-active="true"] .cardInner {
+  border-color: rgba(77, 163, 255, 0.52);
+  box-shadow:
+    0 24px 44px rgba(2, 6, 18, 0.62),
+    0 0 0 1px rgba(77, 163, 255, 0.2),
+    0 0 28px rgba(47, 95, 208, 0.3);
+}
+[data-theme="light"] .card[data-active="true"] .cardInner {
+  border-color: rgba(47, 95, 208, 0.42);
+  box-shadow:
+    0 20px 36px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(47, 95, 208, 0.13),
+    0 0 22px rgba(47, 95, 208, 0.16);
+}
+/* tiny inner highlight on the active card only */
+.card[data-active="true"] .cardInner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0) 20%
+  );
+}
+[data-theme="light"] .card[data-active="true"] .cardInner::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0) 18%
+  );
+}
+
+.img {
+  object-fit: cover;
+  object-position: center 42%;
+  -webkit-user-drag: none;
+}
+
+.imgFallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand-neon-blue, #4da3ff);
+  background: radial-gradient(
+    ellipse at 40% 38%,
+    rgba(47, 95, 208, 0.3),
+    transparent 68%
+  );
+}
+
+/* Readability scrim so the caption survives any artwork */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(3, 6, 16, 0.9) 0%,
+    rgba(3, 6, 16, 0.62) 32%,
+    rgba(3, 6, 16, 0.12) 58%,
+    transparent 76%
+  );
+}
+[data-theme="light"] .scrim {
+  background: linear-gradient(
+    to top,
+    rgba(8, 15, 35, 0.88) 0%,
+    rgba(8, 15, 35, 0.55) 32%,
+    rgba(8, 15, 35, 0.08) 58%,
+    transparent 76%
+  );
+}
+
+.platform,
+.badge {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--cf-w) * 0.055);
+  display: inline-flex;
+  align-items: center;
+  height: clamp(16px, calc(var(--cf-w) * 0.115), 24px);
+  padding: 0 clamp(5px, calc(var(--cf-w) * 0.042), 10px);
+  border-radius: 6px;
+  font-size: clamp(7.5px, calc(var(--cf-w) * 0.041), 10.5px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.platform {
+  left: calc(var(--cf-w) * 0.055);
+  color: #dbe8ff;
+  background: rgba(8, 16, 38, 0.66);
+  border: 1px solid rgba(77, 163, 255, 0.34);
+}
+.badge {
+  right: calc(var(--cf-w) * 0.055);
+  color: var(--color-brand-neon-blue, #4da3ff);
+  background: rgba(47, 95, 208, 0.2);
+  border: 1px solid rgba(77, 163, 255, 0.42);
+}
+.badge[data-tone="red"] {
+  color: #ff5c7d;
+  background: rgba(179, 18, 47, 0.24);
+  border-color: rgba(255, 45, 85, 0.44);
+}
+.badge[data-tone="neutral"] {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.34);
+}
+
+.cardLink {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: block;
+  border-radius: inherit;
+  text-decoration: none;
+  outline: none;
+}
+.cardLink:focus-visible {
+  outline: 2px solid var(--color-brand-neon-blue, #4da3ff);
+  outline-offset: -3px;
+  border-radius: var(--cf-radius);
+}
+
+.cardCaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, calc(var(--cf-w) * 0.016), 5px);
+  padding: clamp(9px, calc(var(--cf-w) * 0.075), 20px);
+}
+.cardName {
+  font-weight: 800;
+  font-size: clamp(11px, calc(var(--cf-w) * 0.074), 18px);
+  line-height: 1.18;
+  letter-spacing: -0.012em;
+  color: #f5f8ff;
+  text-shadow: 0 1px 8px rgba(3, 6, 16, 0.55);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cardPrice {
+  font-size: clamp(10px, calc(var(--cf-w) * 0.058), 14px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #9cc6ff;
+}
+
+/* ── Active product caption ──────────────────────────────────────────── */
+.captionWrap {
+  position: relative;
+  z-index: 2;
+  min-height: 104px;
+  margin-top: clamp(2px, 1vw, 10px);
+  padding: 0 16px;
+}
+.caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  animation: captionIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes captionIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.eyebrowPlatform {
+  color: var(--color-brand-neon-blue, #4da3ff);
+}
+.eyebrowSep {
+  width: 14px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(77, 163, 255, 0.6),
+    transparent
+  );
+}
+
+.captionTitle {
+  font-weight: 800;
+  font-size: clamp(19px, 3.1vw, 27px);
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  color: var(--foreground);
+  max-width: 24ch;
+}
+.captionLink {
+  color: inherit;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+.captionLink:hover {
+  color: var(--color-brand-neon-blue, #4da3ff);
+}
+.captionLink:focus-visible {
+  outline: 2px solid var(--color-brand-neon-blue, #4da3ff);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.captionPrice {
+  font-size: clamp(15px, 2.2vw, 20px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+.captionDesc {
+  font-size: clamp(12px, 1.4vw, 14px);
+  line-height: 1.5;
+  color: var(--text-3);
+  max-width: 46ch;
+}
+
+/* ── HUD ─────────────────────────────────────────────────────────────── */
+.hud {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(12px, 3vw, 28px);
+  margin-top: clamp(10px, 2vw, 16px);
+  padding: 0 clamp(16px, 4vw, 56px);
+}
+.hudProgress {
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 20px);
+  flex: 1;
+  min-width: 0;
+}
+.counter {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.counterStrong {
+  color: var(--foreground);
+}
+.counterDim {
+  color: var(--text-3);
+}
+
+.railTrack {
+  position: relative;
+  flex: 1;
+  max-width: 220px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.railFill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #2f5fd0, #4da3ff);
+  transform-origin: left center;
+  animation-name: railFill;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes railFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.hudNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-2, var(--text-3));
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease;
+}
+.arrow:hover {
+  border-color: rgba(77, 163, 255, 0.6);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px rgba(77, 163, 255, 0.2),
+    0 0 16px rgba(47, 95, 208, 0.28);
+}
+.arrow:active {
+  transform: scale(0.97);
+}
+.arrow:focus-visible {
+  outline: 2px solid var(--color-brand-neon-blue, #4da3ff);
+  outline-offset: 2px;
+}
+[data-theme="light"] .arrow {
+  background: rgba(255, 255, 255, 0.75);
+}
+[data-theme="light"] .arrow:hover {
+  border-color: rgba(47, 95, 208, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(47, 95, 208, 0.16),
+    0 6px 14px rgba(47, 95, 208, 0.16);
+}
+
+/* ── Small screens: same motion, tighter chrome ──────────────────────── */
+@media (max-width: 639px) {
+  .captionWrap {
+    min-height: 118px;
+  }
+  .hud {
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .railTrack {
+    max-width: none;
+  }
+  .arrow {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caption {
+    animation-duration: 1ms;
+  }
+  .railFill {
+    animation: none !important;
+    transform: scaleX(1);
+  }
+  .cardInner {
+    transition: none;
+  }
+}
+
+/* Entrance choreography is meaningless on a throttled renderer — the settle
+   still runs, it just has nothing to stagger. */
+html[data-perf="low"] .caption {
+  animation: none;
+}
