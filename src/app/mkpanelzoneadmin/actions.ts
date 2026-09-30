@@ -6,6 +6,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { FREE_PANEL_SETTING_KEY, sanitizeUrl } from "@/lib/freePanel";
 import { revalidatePath as _revalidate } from "next/cache";
+import { isValidBranchSlug } from "@/lib/branches";
 
 async function ensureOwner() {
   // Bypass session check as requested by the user
@@ -22,6 +23,112 @@ export async function ownerLogout() {
 }
 
 // ----------------------------------------------------------------------
+// PLATFORM BRANCHES
+// ----------------------------------------------------------------------
+
+export async function adminCreateBranch(prevState: any, formData: FormData) {
+  const owner = await ensureOwner();
+  if (!owner) return { success: false, error: "Unauthorized" };
+
+  const platformType = (formData.get("platformType") as string || "").toUpperCase();
+  const name = ((formData.get("name") as string) || "").trim();
+  const rawSlug = ((formData.get("slug") as string) || "").trim().toLowerCase();
+  const description = (formData.get("description") as string || "").trim() || null;
+  const slug = rawSlug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+  if (!name || !slug) return { success: false, error: "Branch name is required." };
+  if (!["ANDROID", "IOS", "PC"].includes(platformType)) {
+    return { success: false, error: "Invalid platform." };
+  }
+  if (!isValidBranchSlug(slug)) {
+    return { success: false, error: "Slug may only contain lowercase letters, numbers and dashes." };
+  }
+
+  const existing = await prisma.platformBranch.findUnique({
+    where: { platformType_slug: { platformType, slug } },
+  });
+  if (existing) return { success: false, error: "A branch with this slug already exists on this platform." };
+
+  const maxOrder = await prisma.platformBranch.aggregate({
+    where: { platformType },
+    _max: { sortOrder: true },
+  });
+
+  try {
+    await prisma.platformBranch.create({
+      data: {
+        platformType,
+        name,
+        slug,
+        description,
+        isEnabled: true,
+        sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
+      },
+    });
+    revalidatePath("/mkpanelzoneadmin/resources");
+    revalidatePath("/access");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to create branch." };
+  }
+}
+
+export async function adminUpdateBranch(formData: FormData) {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const branchId = formData.get("branchId") as string;
+  if (!branchId) return { error: "Missing branch." };
+
+  try {
+    const data: Record<string, unknown> = {};
+    const name = formData.get("name") as string | null;
+    const description = formData.get("description") as string | null;
+    const sortOrderRaw = formData.get("sortOrder") as string | null;
+    if (name !== null) data.name = name.trim();
+    if (description !== null) data.description = description.trim() || null;
+    if (sortOrderRaw !== null && sortOrderRaw !== "") data.sortOrder = parseInt(sortOrderRaw, 10);
+    if (formData.has("isEnabled")) data.isEnabled = formData.get("isEnabled") === "on";
+    if (formData.has("warningEnabled")) data.warningEnabled = formData.get("warningEnabled") === "on";
+    const warningTitle = formData.get("warningTitle") as string | null;
+    const warningMessage = formData.get("warningMessage") as string | null;
+    const warningButtonText = formData.get("warningButtonText") as string | null;
+    if (warningTitle !== null) data.warningTitle = warningTitle.trim() || "BEFORE YOU CONTINUE";
+    if (warningMessage !== null) data.warningMessage = warningMessage.trim();
+    if (warningButtonText !== null) data.warningButtonText = warningButtonText.trim() || "I UNDERSTAND — CONTINUE";
+
+    await prisma.platformBranch.update({ where: { id: branchId }, data });
+    revalidatePath("/mkpanelzoneadmin/resources");
+    revalidatePath("/access");
+    return { success: true };
+  } catch {
+    return { error: "Failed to update branch." };
+  }
+}
+
+export async function adminToggleBranchEnabled(formData: FormData) {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const branchId = formData.get("branchId") as string;
+  if (!branchId) return { error: "Missing branch." };
+
+  try {
+    const branch = await prisma.platformBranch.findUnique({ where: { id: branchId } });
+    if (!branch) return { error: "Branch not found." };
+    await prisma.platformBranch.update({
+      where: { id: branchId },
+      data: { isEnabled: !branch.isEnabled },
+    });
+    revalidatePath("/mkpanelzoneadmin/resources");
+    revalidatePath("/access");
+    return { success: true };
+  } catch {
+    return { error: "Failed to toggle branch." };
+  }
+}
+
+// ----------------------------------------------------------------------
 // CUSTOMERS
 // ----------------------------------------------------------------------
 
@@ -32,6 +139,7 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
   const identifier = formData.get("identifier") as string;
   const password = formData.get("password") as string;
   const platformType = formData.get("platformType") as string;
+  const branchId = (formData.get("branchId") as string) || null;
   const packageId = formData.get("packageId") as string;
   const status = (formData.get("status") as string) || "active";
 
@@ -49,6 +157,26 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
     return { success: false, error: "Invalid package for this platform." };
   }
 
+  /* Branch validation: if the platform has enabled branches, the owner must
+     pick one, and it must belong to the chosen platform. */
+  const platformBranches = await prisma.platformBranch.findMany({
+    where: { platformType, isEnabled: true },
+  });
+  let branchIdToSet: string | null = null;
+  if (platformBranches.length > 0) {
+    const chosen = platformBranches.find((b) => b.id === branchId);
+    if (!chosen) {
+      return { success: false, error: "Please choose a branch for this platform." };
+    }
+    branchIdToSet = chosen.id;
+  } else if (branchId) {
+    const chosen = await prisma.platformBranch.findUnique({ where: { id: branchId } });
+    if (!chosen || chosen.platformType !== platformType) {
+      return { success: false, error: "Invalid branch for this platform." };
+    }
+    branchIdToSet = chosen.id;
+  }
+
   const argon2 = await import("argon2");
   const passwordHash = await argon2.hash(password);
 
@@ -57,6 +185,7 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
       identifier,
       passwordHash,
       platformType,
+      branchId: branchIdToSet,
       packageId,
       status,
       createdSource: "OWNER",

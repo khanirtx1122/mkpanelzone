@@ -6,6 +6,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 
 import { headers } from "next/headers";
+import { ensureCustomerBranch, resolveBranch } from "@/lib/branches";
 
 const rateLimits = new Map<string, { count: number; expiresAt: number }>();
 const idempotencyCache = new Map<string, any>();
@@ -154,6 +155,7 @@ const loginSchema = z.object({
   identifier: z.string(),
   password: z.string(),
   platform: z.enum(['ANDROID', 'IOS', 'PC']),
+  branchSlug: z.string().optional(),
 });
 
 export type LoginResult = 
@@ -161,6 +163,7 @@ export type LoginResult =
   | { type: "INVALID_CREDENTIALS" }
   | { type: "DEVICE_MISMATCH" }
   | { type: "WRONG_PLATFORM" }
+  | { type: "BRANCH_DENIED" }
   | { type: "ERROR"; message: string }
   | null;
 
@@ -183,6 +186,39 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
 
     if (customer.platformType !== parsed.data.platform) {
       return { type: "WRONG_PLATFORM" };
+    }
+
+    if (customer.status !== "active") {
+      return { type: "INVALID_CREDENTIALS" };
+    }
+
+    /* ── Branch authorization (server-side, never trusted from the client) ──
+       The submitted branch slug is only a routing hint; the customer record
+       is the source of truth. If the customer belongs to a branch and it is
+       not the branch they selected (or that branch is disabled), deny with a
+       neutral message that does not reveal which branch the account is in. */
+    if (customer.branchId) {
+      const branch = await prisma.platformBranch.findUnique({
+        where: { id: customer.branchId },
+      });
+      const submitted = parsed.data.branchSlug
+        ? await prisma.platformBranch.findUnique({
+            where: { platformType_slug: { platformType: customer.platformType, slug: parsed.data.branchSlug } },
+          })
+        : null;
+      if (!branch || !branch.isEnabled || (submitted && submitted.id !== branch.id)) {
+        return { type: "BRANCH_DENIED" };
+      }
+    } else {
+      // Legacy/pre-branch customer: attach to their platform's first enabled
+      // branch so split platforms keep working without owner intervention.
+      const branchId = await ensureCustomerBranch(customer);
+      if (branchId && parsed.data.branchSlug) {
+        const resolved = await resolveBranch(customer.platformType, parsed.data.branchSlug);
+        if (!resolved.ok || resolved.branch.id !== branchId) {
+          return { type: "BRANCH_DENIED" };
+        }
+      }
     }
 
     const { cookies, headers } = await import("next/headers");
@@ -609,6 +645,11 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
       agentPaymentProof: finalPaymentProofUrl
     }
   });
+
+  /* Attach agent-created customers to their platform's default branch (if
+     one exists) so they land in the right section from their first login. */
+  const created = await prisma.customer.findUnique({ where: { identifier } });
+  if (created) await ensureCustomerBranch(created);
 
   const { revalidatePath } = await import("next/cache");
   revalidatePath("/mkpanelzoneadmin/customers");

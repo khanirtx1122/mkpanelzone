@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
-import { Download, Key, Link as LinkIcon, LogOut, ShieldCheck, HelpCircle } from "lucide-react";
+import { Download, Key, Link as LinkIcon, LogOut, ShieldCheck, HelpCircle, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { PackageResource } from "@prisma/client";
 
@@ -14,11 +14,35 @@ interface DashboardClientProps {
   packageName: string;
   resources: PackageResource[];
   platformType: string;
+  branchName: string | null;
+  warning: {
+    branchId: string;
+    title: string;
+    message: string;
+    buttonText: string;
+  } | null;
 }
 
-export function DashboardClient({ identifier, packageName, resources, platformType }: DashboardClientProps) {
+export function DashboardClient({ identifier, packageName, resources, platformType, branchName, warning }: DashboardClientProps) {
   const [copied, setCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  /* Branch safety notice: once per authenticated browser session.
+     ackKey is derived (no state); the check is deferred one tick so the
+     modal mounts after first paint instead of cascading a re-render. */
+  const ackKey = warning ? `branch_warning_ack_${warning.branchId}` : null;
+  const [showWarning, setShowWarning] = useState(false);
+  useEffect(() => {
+    if (!ackKey || typeof window === "undefined") return;
+    const t = setTimeout(() => {
+      if (!sessionStorage.getItem(ackKey)) setShowWarning(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [ackKey]);
+  const acknowledgeWarning = () => {
+    if (ackKey && typeof window !== "undefined") sessionStorage.setItem(ackKey, "1");
+    setShowWarning(false);
+  };
 
   const mainFile = resources.find(r => r.name === 'MAIN FILE');
   const filePassword = resources.find(r => r.name === 'FILE PASSWORD');
@@ -41,6 +65,22 @@ export function DashboardClient({ identifier, packageName, resources, platformTy
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 md:py-24 min-h-screen">
+      {/* Branch safety notice — blocks resources until acknowledged */}
+      {showWarning && warning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <GlassCard className="max-w-md w-full p-8 border-brand-blue-500/30 shadow-[0_0_30px_rgba(47,95,208,0.15)]">
+            <div className="w-14 h-14 rounded-2xl bg-brand-blue-500/10 border border-brand-blue-500/30 flex items-center justify-center text-brand-blue-500 mb-6">
+              <ShieldAlert size={28} />
+            </div>
+            <h2 className="text-2xl font-extrabold text-foreground mb-4 uppercase tracking-tight">{warning.title}</h2>
+            <p className="text-brand-ink-3 text-sm leading-relaxed mb-8">{warning.message}</p>
+            <Button variant="primary" size="lg" className="w-full" onClick={acknowledgeWarning}>
+              {warning.buttonText}
+            </Button>
+          </GlassCard>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-16">
         <div className="flex items-center gap-4">
@@ -75,6 +115,11 @@ export function DashboardClient({ identifier, packageName, resources, platformTy
             <p className="font-extrabold text-foreground text-lg tracking-wide">{identifier}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {branchName && (
+              <span className="px-3 py-1 bg-brand-blue-500/10 text-brand-blue-500 text-[10px] font-bold rounded-full border border-brand-blue-500/20 tracking-widest uppercase">
+                {branchName}
+              </span>
+            )}
             <span className="px-3 py-1 bg-foreground/10 text-foreground text-[10px] font-bold rounded-full border border-border-subtle tracking-widest uppercase">
               {platformType}
             </span>

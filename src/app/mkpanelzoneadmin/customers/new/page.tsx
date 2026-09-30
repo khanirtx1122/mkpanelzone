@@ -10,9 +10,15 @@ export const metadata = {
 export default async function AdminCreateCustomerPage() {
   const { ensureDefaultPackages } = await import("@/lib/auto-repair");
   await ensureDefaultPackages();
+  const { ensureDefaultBranches } = await import("@/lib/branches");
+  await ensureDefaultBranches();
 
   const packages = await prisma.package.findMany({
     orderBy: { name: "asc" }
+  });
+
+  const branches = await prisma.platformBranch.findMany({
+    orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
   });
 
   return (
@@ -26,7 +32,7 @@ export default async function AdminCreateCustomerPage() {
         <p className="text-brand-ink-3">Add a new customer directly from the Owner Panel.</p>
       </div>
 
-      <CreateCustomerForm packages={packages} />
+      <CreateCustomerForm packages={packages} branches={branches.map(b => ({ id: b.id, platformType: b.platformType, name: b.name, isEnabled: b.isEnabled }))} />
     </div>
   );
 }

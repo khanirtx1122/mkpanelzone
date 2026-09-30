@@ -13,6 +13,7 @@ model Customer {
   identifier        String           @unique
   passwordHash      String
   platformType      String           @default("ANDROID")
+  branchId          String?
   packageId         String?
   status            String           @default("active")
   createdSource     String           @default("MIGRATED")
@@ -23,7 +24,33 @@ model Customer {
   updatedAt         DateTime         @updatedAt
   agent             Agent?           @relation(fields: [createdByAgentId], references: [id])
   package           Package?         @relation(fields: [packageId], references: [id])
+  branch            PlatformBranch?  @relation(fields: [branchId], references: [id])
   devices           CustomerDevice[]
+}
+
+/// Generic per-platform access branch (e.g. ANDROID → AIM Plus Holo, HEXHEAD).
+/// Customers and resources point at a branch; null branchId means the
+/// platform-wide legacy experience (no branch split). Architecture supports
+/// any number of branches on any platform without further redesign.
+model PlatformBranch {
+  id                 String   @id @default(uuid())
+  platformType       String
+  name               String
+  slug               String
+  description        String?
+  isEnabled          Boolean  @default(true)
+  warningEnabled     Boolean  @default(false)
+  warningTitle       String   @default("BEFORE YOU CONTINUE")
+  warningMessage     String   @default("For new or beta software, test it first in a non-critical environment or secondary profile before using it with important accounts or data. Follow the provided setup instructions carefully.")
+  warningButtonText  String   @default("I UNDERSTAND — CONTINUE")
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  customers Customer[]
+  resources PackageResource[]
+
+  @@unique([platformType, slug])
 }
 
 model Agent {
@@ -54,6 +81,7 @@ model PackageResource {
   id           String   @id @default(uuid())
   packageId    String?
   platformType String   @default("ANDROID")
+  branchId     String?
   type         String
   name         String
   description  String?
@@ -65,6 +93,7 @@ model PackageResource {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   package      Package? @relation(fields: [packageId], references: [id])
+  branch       PlatformBranch? @relation(fields: [branchId], references: [id])
 }
 
 model CustomerDevice {

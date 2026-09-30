@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export default async function EditResourcePage(props: { 
   params: Promise<{ id: string }>,
-  searchParams?: Promise<{ packageId?: string, platform?: string }>
+  searchParams?: Promise<{ packageId?: string, platform?: string, branchId?: string }>
 }) {
   const params = await props.params;
   const searchParams = await props.searchParams;
@@ -27,18 +27,24 @@ export default async function EditResourcePage(props: {
     orderBy: { name: "asc" }
   });
 
+  const allBranches = await prisma.platformBranch.findMany({
+    orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
+  });
+
   const androidPackages = packages.filter(p => p.platformType === "ANDROID");
   const iosPackages = packages.filter(p => p.platformType === "IOS");
   const pcPackages = packages.filter(p => p.platformType === "PC");
 
   async function saveResource(formData: FormData) {
     "use server";
-    
+
     const name = formData.get("name") as string;
     const type = formData.get("type") as string;
     const rawPackageId = formData.get("packageId") as string;
     const packageId = rawPackageId === "" ? null : rawPackageId;
     const platformType = formData.get("platformType") as string;
+    const rawBranchId = formData.get("branchId") as string;
+    const branchId = rawBranchId === "" ? null : rawBranchId;
     const url = formData.get("url") as string || null;
     const secret = formData.get("secret") as string || null;
     const status = formData.get("status") as string;
@@ -54,14 +60,24 @@ export default async function EditResourcePage(props: {
         }
       }
 
+      if (branchId) {
+        const branch = await prisma.platformBranch.findUnique({ where: { id: branchId } });
+        if (!branch) {
+          throw new Error("Invalid branch selected");
+        }
+        if (branch.platformType !== platformType) {
+          throw new Error(`Platform mismatch: Branch belongs to ${branch.platformType} but resource is set to ${platformType}`);
+        }
+      }
+
       if (isNew) {
         await prisma.packageResource.create({
-          data: { name, type, packageId, platformType, url, secret, status }
+          data: { name, type, packageId, platformType, branchId, url, secret, status }
         });
       } else {
         await prisma.packageResource.update({
           where: { id: params.id },
-          data: { name, type, packageId, platformType, url, secret, status }
+          data: { name, type, packageId, platformType, branchId, url, secret, status }
         });
       }
       revalidatePath("/mkpanelzoneadmin/resources");
@@ -150,6 +166,27 @@ export default async function EditResourcePage(props: {
                   </optgroup>
                 )}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">Branch (Optional)</label>
+              <select
+                name="branchId"
+                defaultValue={resource?.branchId || (isNew ? searchParams?.branchId || "" : "")}
+                className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
+              >
+                <option value="">-- Platform-wide --</option>
+                {allBranches.length > 0 && (
+                  <optgroup label="BRANCHES">
+                    {allBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.platformType === "IOS" ? "IPHONE" : branch.platformType} — {branch.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <p className="text-[10px] text-brand-ink-3 mt-1">Platform-wide resources are visible to every branch on the platform. Branch resources only inside their branch.</p>
             </div>
 
             <div className="space-y-2">

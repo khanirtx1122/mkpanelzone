@@ -5,9 +5,19 @@ import { adminCreateCustomer } from "@/app/mkpanelzoneadmin/actions";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export function CreateCustomerForm({ packages }: { packages: any[] }) {
+interface BranchLite {
+  id: string;
+  platformType: string;
+  name: string;
+  isEnabled: boolean;
+}
+
+export function CreateCustomerForm({ packages, branches }: { packages: any[]; branches: BranchLite[] }) {
   const router = useRouter();
-  const [state, formAction, isPending] = useActionState(adminCreateCustomer, null);
+  const [state, formAction, isPending] = useActionState<
+    { success?: boolean; error?: string } | null,
+    FormData
+  >(adminCreateCustomer, null);
 
   useEffect(() => {
     if (state?.success) {
@@ -16,6 +26,7 @@ export function CreateCustomerForm({ packages }: { packages: any[] }) {
   }, [state, router]);
 
   const [platform, setPlatform] = useState("ANDROID");
+  const platformBranches = branches.filter((b) => b.platformType === platform);
 
   return (
     <form action={formAction} className="space-y-6 bg-white/5 border border-white/10 p-6 rounded-2xl">
@@ -62,6 +73,27 @@ export function CreateCustomerForm({ packages }: { packages: any[] }) {
           <option value="PC">PC</option>
         </select>
       </div>
+
+      {platformBranches.length > 0 && (
+        <div>
+          <label className="block text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-2">Branch</label>
+          <select
+            name="branchId"
+            className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors appearance-none"
+            required
+          >
+            <option value="">Select a branch...</option>
+            {platformBranches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}{!branch.isEnabled ? " (disabled)" : ""}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-brand-ink-3 mt-1.5">
+            The customer will only be able to sign in through this branch.
+          </p>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-2">Package</label>
