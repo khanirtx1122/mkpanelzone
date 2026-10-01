@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { SessionRefresh } from "@/components/admin/SessionRefresh";
 import { LogOut, ExternalLink } from "lucide-react";
 import { ownerLogout } from "./actions";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
@@ -25,47 +26,51 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   /* Platforms are needed by the sidebar grouping. Cheap, cached read. */
   const platforms = await listAllPlatforms();
 
+  /* SessionRefresh re-issues the cookie on every page load (sliding session),
+     so an actively used panel never silently expires into the 404 cloak. */
   return (
-    <AdminToastProvider>
-      <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-brand-red-500/30">
-        <AdminSidebar username={owner.username} platforms={platforms} />
+    <SessionRefresh>
+      <AdminToastProvider>
+        <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-brand-red-500/30">
+          <AdminSidebar username={owner.username} platforms={platforms} />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0c]">
-          {/* Top Header */}
-          <header className="h-16 flex items-center justify-between px-4 md:px-10 border-b border-white/5 bg-black/80 backdrop-blur-xl sticky top-0 z-10 relative">
-            <div className="flex items-center gap-2 text-sm font-medium text-brand-ink-2 min-w-0">
-              <span>Admin</span>
-              <span className="text-brand-ink-3">/</span>
-              <span className="text-white truncate">Workspace</span>
-            </div>
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0c]">
+            {/* Top Header */}
+            <header className="h-16 flex items-center justify-between px-4 md:px-10 border-b border-white/5 bg-black/80 backdrop-blur-xl sticky top-0 z-10 relative">
+              <div className="flex items-center gap-2 text-sm font-medium text-brand-ink-2 min-w-0">
+                <span>Admin</span>
+                <span className="text-brand-ink-3">/</span>
+                <span className="text-white truncate">Workspace</span>
+              </div>
 
-            <div className="flex items-center gap-3 md:gap-4 shrink-0">
-              <Link href="/" target="_blank" className="hidden sm:flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-brand-ink-2 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/5 admin-press">
-                <ExternalLink size={14} /> View Live Site
-              </Link>
-              <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
-              <form action={ownerLogout}>
-                <AdminSubmitButton
-                  variant="secondary"
-                  label="Sign Out"
-                  successLabel="Signed out"
-                  className="!text-brand-red-500 !bg-brand-red-500/10 hover:!bg-brand-red-500/20 !border-brand-red-500/20 !px-4 !py-2"
-                >
-                  <LogOut size={14} />
-                </AdminSubmitButton>
-              </form>
-            </div>
-          </header>
+              <div className="flex items-center gap-3 md:gap-4 shrink-0">
+                <Link href="/" target="_blank" className="hidden sm:flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-brand-ink-2 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/5 admin-press">
+                  <ExternalLink size={14} /> View Live Site
+                </Link>
+                <div className="w-px h-6 bg-white/10 hidden sm:block"></div>
+                <form action={ownerLogout}>
+                  <AdminSubmitButton
+                    variant="secondary"
+                    label="Sign Out"
+                    successLabel="Signed out"
+                    className="!text-brand-red-500 !bg-brand-red-500/10 hover:!bg-brand-red-500/20 !border-brand-red-500/20 !px-4 !py-2"
+                  >
+                    <LogOut size={14} />
+                  </AdminSubmitButton>
+                </form>
+              </div>
+            </header>
 
-          {/* Page Content */}
-          <main className="flex-1 p-4 sm:p-6 md:p-10 overflow-x-hidden">
-            <div className="max-w-7xl mx-auto w-full">
-              <AdminShell>{children}</AdminShell>
-            </div>
-          </main>
+            {/* Page Content */}
+            <main className="flex-1 p-4 sm:p-6 md:p-10 overflow-x-hidden">
+              <div className="max-w-7xl mx-auto w-full">
+                <AdminShell>{children}</AdminShell>
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
-    </AdminToastProvider>
+      </AdminToastProvider>
+    </SessionRefresh>
   );
 }

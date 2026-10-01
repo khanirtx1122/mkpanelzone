@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
+import { isHttpsRequest, writeOwnerSessionCookie } from "@/lib/owner-session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -22,22 +22,14 @@ export async function GET(request: Request) {
       return new NextResponse(null, { status: 404 });
     }
 
-    // Set secure cookie
+    // Set secure cookie — `secure` follows the real request protocol so the
+    // cookie survives plain-HTTP origins too (see lib/owner-session.ts).
     const sessionData = {
       userId: owner.id,
       username: owner.username,
       role: owner.role,
     };
-    const sessionValue = JSON.stringify(sessionData);
-
-    const cookieStore = await cookies();
-    cookieStore.set("owner_session", sessionValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
+    await writeOwnerSessionCookie(sessionData, isHttpsRequest(request));
 
     return NextResponse.redirect(new URL("/mkpanelzoneadmin", request.url));
   } catch (error) {
