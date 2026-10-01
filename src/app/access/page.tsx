@@ -1,7 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccessForm } from "./AccessForm";
-import { ensureDefaultBranches, listEnabledBranches } from "@/lib/branches";
+import { ensureDefaultBranches } from "@/lib/branches";
+import { listActivePlatforms } from "@/lib/platforms";
+import { prisma } from "@/lib/prisma";
+
+export const metadata = {
+  title: "Customer Access | MK Panel Zone",
+};
 
 export default async function AccessPage() {
   const cookieStore = await cookies();
@@ -11,19 +17,47 @@ export default async function AccessPage() {
     redirect("/dashboard");
   }
 
+  /* The Android branch split is a genuine Android-only structure, so it still
+     runs explicitly. Everything platform-generic now comes from the database. */
   await ensureDefaultBranches();
-  const androidBranches = await listEnabledBranches("ANDROID");
+
+  const platforms = await listActivePlatforms();
+
+  /* Branches for every enabled platform in ONE grouped query rather than a
+     per-platform round-trip. The selection screen switches between platforms
+     client-side without any additional network work. */
+  const branches = await prisma.platformBranch.findMany({
+    where: {
+      platformType: { in: platforms.map((p) => p.code) },
+      isEnabled: true,
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      platformType: true,
+      name: true,
+      slug: true,
+      description: true,
+    },
+  });
+
+  const branchesByPlatform: Record<string, typeof branches> = {};
+  for (const b of branches) {
+    (branchesByPlatform[b.platformType] ??= []).push(b);
+  }
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center px-6 py-32 relative">
       <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-10 pointer-events-none" />
       <AccessForm
-        androidBranches={androidBranches.map((b) => ({
-          id: b.id,
-          name: b.name,
-          slug: b.slug,
-          description: b.description,
+        platforms={platforms.map((p) => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          description: p.description,
+          iconKey: p.iconKey,
         }))}
+        branchesByPlatform={branchesByPlatform}
       />
     </div>
   );

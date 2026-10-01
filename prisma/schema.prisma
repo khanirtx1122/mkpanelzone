@@ -26,6 +26,35 @@ model Customer {
   package           Package?         @relation(fields: [packageId], references: [id])
   branch            PlatformBranch?  @relation(fields: [branchId], references: [id])
   devices           CustomerDevice[]
+
+  // Hot admin list paths: platform filter + newest-first ordering.
+  @@index([platformType, createdAt(sort: Desc)])
+  @@index([branchId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([createdByAgentId])
+  @@index([packageId])
+}
+
+/// The single source of truth for access platforms (ANDROID, IPHONE, PC, ...).
+/// `code` is the stable, immutable key referenced by customers, branches,
+/// packages and resources. `code` is never shown to end users; `name` is.
+/// Owner can add new platforms from the Admin panel — no code change needed.
+model Platform {
+  id          String   @id @default(uuid())
+  /// Stable uppercase key, e.g. ANDROID | IOS | PC | FANCY. Immutable once created.
+  code        String   @unique
+  /// Display name shown publicly, e.g. "Android", "iPhone", "Fancy".
+  name        String
+  description String?
+  /// Controlled icon key resolved by the UI (never raw markup).
+  iconKey     String   @default("layers")
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isEnabled, sortOrder])
 }
 
 /// Generic per-platform access branch (e.g. ANDROID → AIM Plus Holo, HEXHEAD).
@@ -52,6 +81,9 @@ model PlatformBranch {
   packages  Package[]
 
   @@unique([platformType, slug])
+  // Branch lookup is always "this platform, ordered by sortOrder".
+  @@index([platformType, isEnabled, sortOrder])
+  @@index([platformType, sortOrder])
 }
 
 model Agent {
@@ -78,6 +110,9 @@ model Package {
   customers          Customer[]
   resources          PackageResource[]
   branch             PlatformBranch?   @relation(fields: [branchId], references: [id])
+
+  @@index([platformType, isDefaultForAgents])
+  @@index([branchId])
 }
 
 model PackageResource {
@@ -97,6 +132,12 @@ model PackageResource {
   updatedAt    DateTime @updatedAt
   package      Package? @relation(fields: [packageId], references: [id])
   branch       PlatformBranch? @relation(fields: [branchId], references: [id])
+
+  // The customer dashboard resolves resources by package OR by platform-wide.
+  @@index([branchId])
+  @@index([packageId])
+  @@index([platformType, status, sortOrder])
+  @@index([platformType, packageId, status])
 }
 
 model CustomerDevice {
@@ -127,6 +168,8 @@ model Product {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   orders             Order[]
+
+  @@index([active, createdAt(sort: Desc)])
 }
 
 model Order {
@@ -143,6 +186,10 @@ model Order {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   product          Product  @relation(fields: [productId], references: [id])
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([productId])
 }
 
 model PaymentMethod {

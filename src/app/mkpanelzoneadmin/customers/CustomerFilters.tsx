@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { useTransition } from "react";
 
-export function CustomerFilters() {
+export function CustomerFilters({ platforms }: { platforms: { code: string; name: string }[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -54,9 +54,9 @@ export function CustomerFilters() {
         className="bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
       >
         <option value="ALL" className="bg-black text-white">All Platforms</option>
-        <option value="ANDROID" className="bg-black text-white">Android</option>
-        <option value="IOS" className="bg-black text-white">iOS</option>
-        <option value="PC" className="bg-black text-white">PC</option>
+        {platforms.map((p) => (
+          <option key={p.code} value={p.code} className="bg-black text-white">{p.name}</option>
+        ))}
       </select>
 
       <select

@@ -4,19 +4,18 @@ import { notFound } from "next/navigation";
 import { Plus, GitBranch, Link as LinkIcon, Users, Edit, Power, PowerOff } from "lucide-react";
 import { toggleResourceStatus } from "../../../../actions";
 import { BranchManager } from "../../../BranchManager";
-
-const PLATFORM_LABELS: Record<string, string> = {
-  ANDROID: "Android",
-  IOS: "iPhone",
-  PC: "PC",
-};
+import { findPlatformByCode } from "@/lib/platforms";
 
 export default async function BranchResourcesPage(props: {
   params: Promise<{ platform: string; branchId: string }>;
 }) {
   const { platform: rawPlatform, branchId } = await props.params;
   const platform = rawPlatform.toUpperCase();
-  if (!["ANDROID", "IOS", "PC"].includes(platform)) return notFound();
+
+  /* Validity comes from the DB — platforms created in Admin work here too. */
+  const platformRecord = await findPlatformByCode(platform);
+  if (!platformRecord) return notFound();
+  const platformLabel = platformRecord.name;
 
   const branch = await prisma.platformBranch.findUnique({
     where: { id: branchId },
@@ -50,7 +49,7 @@ export default async function BranchResourcesPage(props: {
             href={`/mkpanelzoneadmin/resources/platform/${platform}`}
             className="text-brand-ink-3 hover:text-white transition-colors"
           >
-            {PLATFORM_LABELS[platform]}
+            {platformLabel}
           </Link>
           <span className="text-brand-ink-3/50">/</span>
           <span className="text-white">{branch.name}</span>
@@ -64,7 +63,7 @@ export default async function BranchResourcesPage(props: {
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-white uppercase font-sans">{branch.name}</h1>
               <p className="text-sm text-brand-ink-3 mt-1 font-mono flex flex-wrap items-center gap-x-3">
-                <span>{PLATFORM_LABELS[platform]} branch</span>
+                <span>{platformLabel} branch</span>
                 <span>·</span>
                 <span className="inline-flex items-center gap-1"><LinkIcon size={12} /> {resources.length} {resources.length === 1 ? "resource" : "resources"}</span>
                 <span>·</span>

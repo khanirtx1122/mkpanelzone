@@ -1,48 +1,86 @@
 import { prisma } from "@/lib/prisma";
 import { CustomerFilters } from "./CustomerFilters";
-import { ShieldAlert, ShieldCheck, Smartphone, Monitor, UserPlus } from "lucide-react";
+import { UserPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { listAllPlatforms } from "@/lib/platforms";
+import { PlatformBadgeIcon } from "../resources/PlatformBadgeIcon";
 
 export const metadata = {
   title: "Customers | Owner Panel",
 };
 
+const PAGE_SIZE = 25;
+
 export default async function AdminCustomersPage(props: {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
-  const q = searchParams?.q as string || "";
-  const platformFilter = searchParams?.platform as string || "ALL";
-  const statusFilter = searchParams?.status as string || "ALL";
-  const agentFilter = searchParams?.agentId as string || "";
+  const q = (searchParams?.q as string) || "";
+  const platformFilter = (searchParams?.platform as string) || "ALL";
+  const statusFilter = (searchParams?.status as string) || "ALL";
+  const agentFilter = (searchParams?.agentId as string) || "";
+  const page = Math.max(1, parseInt((searchParams?.page as string) || "1", 10) || 1);
 
-  const customers = await prisma.customer.findMany({
-    where: {
-      ...(q ? { identifier: { contains: q } } : {}),
-      ...(platformFilter !== "ALL" ? { platformType: platformFilter } : {}),
-      ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
-      ...(agentFilter ? { createdByAgentId: agentFilter } : {})
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      agent: {
-        select: { username: true }
+  const where = {
+    ...(q ? { identifier: { contains: q } } : {}),
+    ...(platformFilter !== "ALL" ? { platformType: platformFilter } : {}),
+    ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
+    ...(agentFilter ? { createdByAgentId: agentFilter } : {}),
+  };
+
+  /* Platforms, page of customers and total count in parallel. The previous
+     version loaded EVERY matching customer plus relations on each render —
+     with 16 rows today that is fine, at 10k it stalls. */
+  const [platforms, customers, total] = await Promise.all([
+    listAllPlatforms(),
+    prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        identifier: true,
+        platformType: true,
+        status: true,
+        createdAt: true,
+        createdSource: true,
+        agentPaymentProof: true,
+        package: { select: { name: true } },
+        agent: { select: { username: true } },
       },
-      package: {
-        select: { name: true }
-      }
-    }
-  });
+    }),
+    prisma.customer.count({ where }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const buildPageUrl = (p: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (platformFilter !== "ALL") params.set("platform", platformFilter);
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (agentFilter) params.set("agentId", agentFilter);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/mkpanelzoneadmin/customers${qs ? `?${qs}` : ""}`;
+  };
+
+  const platformLabel = (code: string) =>
+    platforms.find((p) => p.code === code)?.name ?? code;
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight uppercase mb-2">Customer Records</h1>
-          <p className="text-brand-ink-3">View and manage all registered customers.</p>
+          <p className="text-brand-ink-3">
+            View and manage all registered customers.
+            <span className="text-brand-ink-3/70"> ({total} total)</span>
+          </p>
         </div>
-        <Link 
-          href="/mkpanelzoneadmin/customers/new" 
+        <Link
+          href="/mkpanelzoneadmin/customers/new"
           className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-brand-blue-500 hover:bg-brand-blue-400 text-white font-bold rounded-lg transition-colors"
         >
           <UserPlus size={18} />
@@ -50,7 +88,7 @@ export default async function AdminCustomersPage(props: {
         </Link>
       </div>
 
-      <CustomerFilters />
+      <CustomerFilters platforms={platforms.map((p) => ({ code: p.code, name: p.name }))} />
 
       <div className="space-y-4">
         {customers.length === 0 ? (
@@ -66,12 +104,15 @@ export default async function AdminCustomersPage(props: {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-bold text-white text-lg group-hover:text-brand-blue-400 transition-colors">{customer.identifier}</p>
-                      
+
                       <span className="px-2 py-0.5 rounded bg-white/10 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        {customer.platformType === "PC" ? <Monitor size={10} /> : <Smartphone size={10} />}
-                        {customer.platformType}
+                        <PlatformBadgeIcon
+                          iconKey={platforms.find((p) => p.code === customer.platformType)?.iconKey}
+                          size={10}
+                        />
+                        {platformLabel(customer.platformType)}
                       </span>
-                      
+
                       {customer.status === "active" ? (
                         <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-500 border border-green-500/20 text-[10px] font-bold uppercase tracking-wider">Active</span>
                       ) : (
@@ -85,7 +126,7 @@ export default async function AdminCustomersPage(props: {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="text-right flex items-center gap-4 justify-end">
                   {customer.agentPaymentProof && (
                     <span className="text-[10px] uppercase font-bold px-2 py-1 bg-brand-blue-500/10 text-brand-blue-500 border border-brand-blue-500/20 rounded">Proof Attached</span>
@@ -100,6 +141,38 @@ export default async function AdminCustomersPage(props: {
           ))
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5">
+          <p className="text-xs font-mono text-brand-ink-3">
+            Page {page} of {totalPages} · {total} customers
+          </p>
+          <div className="flex items-center gap-2">
+            <Link
+              href={buildPageUrl(Math.max(1, page - 1))}
+              aria-disabled={page <= 1}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                page <= 1
+                  ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                  : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+              }`}
+            >
+              <ChevronLeft size={14} /> Prev
+            </Link>
+            <Link
+              href={buildPageUrl(Math.min(totalPages, page + 1))}
+              aria-disabled={page >= totalPages}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                page >= totalPages
+                  ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                  : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+              }`}
+            >
+              Next <ChevronRight size={14} />
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,20 +1,25 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Monitor, Smartphone, Key } from "lucide-react";
+import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Key } from "lucide-react";
 import { AgentActions } from "./AgentActions";
+import { listAllPlatforms } from "@/lib/platforms";
+import { PlatformBadgeIcon } from "../../resources/PlatformBadgeIcon";
 
 export default async function AgentDetailsPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const agent = await prisma.agent.findUnique({
-    where: { id: params.id },
-    include: {
-      createdCustomers: {
-        orderBy: { createdAt: "desc" },
-        take: 50 // Show recent 50
+  const [agent, platforms] = await Promise.all([
+    prisma.agent.findUnique({
+      where: { id: params.id },
+      include: {
+        createdCustomers: {
+          orderBy: { createdAt: "desc" },
+          take: 50 // Show recent 50
+        }
       }
-    }
-  });
+    }),
+    listAllPlatforms(),
+  ]);
 
   if (!agent || agent.role !== "AGENT") {
     notFound();
@@ -79,14 +84,14 @@ export default async function AgentDetailsPage(props: { params: Promise<{ id: st
               <p className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-widest mb-1">Total Customers</p>
               <p className="text-3xl font-black text-brand-blue-500">{agent.createdCustomers.length}</p>
             </div>
-            <div className="p-5 border border-white/10 rounded-2xl bg-white/5 text-center">
-              <p className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-widest mb-1 flex justify-center items-center gap-1"><Smartphone size={12}/> Android</p>
-              <p className="text-3xl font-black text-white">{platformCounts['ANDROID'] || 0}</p>
-            </div>
-            <div className="p-5 border border-white/10 rounded-2xl bg-white/5 text-center">
-              <p className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-widest mb-1 flex justify-center items-center gap-1"><Monitor size={12}/> PC</p>
-              <p className="text-3xl font-black text-white">{platformCounts['PC'] || 0}</p>
-            </div>
+            {platforms.map((platform) => (
+              <div key={platform.id} className="p-5 border border-white/10 rounded-2xl bg-white/5 text-center">
+                <p className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-widest mb-1 flex justify-center items-center gap-1">
+                  <PlatformBadgeIcon iconKey={platform.iconKey} size={12} /> {platform.name}
+                </p>
+                <p className="text-3xl font-black text-white">{platformCounts[platform.code] || 0}</p>
+              </div>
+            ))}
           </div>
 
           <div className="p-6 border border-white/10 rounded-2xl bg-white/5">

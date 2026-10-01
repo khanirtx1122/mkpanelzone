@@ -1,11 +1,14 @@
 import { CreateCustomerForm } from "./CreateCustomerForm";
 import { UserPlus } from "lucide-react";
+import { listActivePlatforms } from "@/lib/platforms";
 
 export const metadata = {
   title: "Create Customer | Agent Panel",
 };
 
 export default async function AgentCreateCustomerPage() {
+  const platforms = await listActivePlatforms();
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
@@ -22,7 +25,7 @@ export default async function AgentCreateCustomerPage() {
             <h2 className="text-xl font-extrabold text-foreground tracking-tight">Customer Details</h2>
           </div>
           
-          <CreateCustomerForm />
+          <CreateCustomerForm platforms={platforms.map((p) => ({ code: p.code, name: p.name }))} />
         </div>
       </div>
     </div>

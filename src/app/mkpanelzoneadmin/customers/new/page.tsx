@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CreateCustomerForm } from "./CreateCustomerForm";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { listActivePlatforms } from "@/lib/platforms";
 
 export const metadata = {
   title: "Create Customer | Owner Panel",
@@ -13,13 +14,15 @@ export default async function AdminCreateCustomerPage() {
   const { ensureDefaultBranches } = await import("@/lib/branches");
   await ensureDefaultBranches();
 
-  const packages = await prisma.package.findMany({
-    orderBy: { name: "asc" }
-  });
-
-  const branches = await prisma.platformBranch.findMany({
-    orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
-  });
+  const [packages, branches, platforms] = await Promise.all([
+    prisma.package.findMany({
+      orderBy: { name: "asc" }
+    }),
+    prisma.platformBranch.findMany({
+      orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
+    }),
+    listActivePlatforms(),
+  ]);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -32,7 +35,11 @@ export default async function AdminCreateCustomerPage() {
         <p className="text-brand-ink-3">Add a new customer directly from the Owner Panel.</p>
       </div>
 
-      <CreateCustomerForm packages={packages} branches={branches.map(b => ({ id: b.id, platformType: b.platformType, name: b.name, isEnabled: b.isEnabled }))} />
+      <CreateCustomerForm
+        packages={packages}
+        branches={branches.map(b => ({ id: b.id, platformType: b.platformType, name: b.name, isEnabled: b.isEnabled }))}
+        platforms={platforms.map(p => ({ code: p.code, name: p.name }))}
+      />
     </div>
   );
 }

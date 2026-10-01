@@ -14,6 +14,8 @@ interface DashboardClientProps {
   packageName: string;
   resources: PackageResource[];
   platformType: string;
+  /** Friendly platform name from the platform table (falls back to the code). */
+  platformName?: string;
   branchName: string | null;
   warning: {
     branchId: string;
@@ -23,7 +25,7 @@ interface DashboardClientProps {
   } | null;
 }
 
-export function DashboardClient({ identifier, packageName, resources, platformType, branchName, warning }: DashboardClientProps) {
+export function DashboardClient({ identifier, packageName, resources, platformType, platformName, branchName, warning }: DashboardClientProps) {
   const [copied, setCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -121,7 +123,7 @@ export function DashboardClient({ identifier, packageName, resources, platformTy
               </span>
             )}
             <span className="px-3 py-1 bg-foreground/10 text-foreground text-[10px] font-bold rounded-full border border-border-subtle tracking-widest uppercase">
-              {platformType}
+              {platformName || platformType}
             </span>
             <span className="px-3 py-1 bg-brand-blue-500/10 text-brand-blue-500 text-[10px] font-bold rounded-full border border-brand-blue-500/20 tracking-widest shadow-[0_0_10px_rgba(47,95,208,0.2)]">
               ACTIVE

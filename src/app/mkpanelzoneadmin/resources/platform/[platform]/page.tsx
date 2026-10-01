@@ -3,19 +3,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus, GitBranch, Link as LinkIcon, Users } from "lucide-react";
 import { BranchManager } from "../../BranchManager";
-
-const PLATFORM_LABELS: Record<string, string> = {
-  ANDROID: "Android",
-  IOS: "iPhone",
-  PC: "PC",
-};
+import { findPlatformByCode } from "@/lib/platforms";
 
 export default async function PlatformBranchesPage(props: {
   params: Promise<{ platform: string }>;
 }) {
   const { platform: rawPlatform } = await props.params;
   const platform = rawPlatform.toUpperCase();
-  if (!["ANDROID", "IOS", "PC"].includes(platform)) return notFound();
+
+  /* Platform validity now comes from the database, so a platform created in
+     Admin opens here immediately — with no source change. */
+  const platformRecord = await findPlatformByCode(platform);
+  if (!platformRecord) return notFound();
+  const platformLabel = platformRecord.name;
 
   const branches = await prisma.platformBranch.findMany({
     where: { platformType: platform },
@@ -39,14 +39,17 @@ export default async function PlatformBranchesPage(props: {
         >
           <ArrowLeft size={16} /> Platform Resources
         </Link>
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-white uppercase font-sans">
-            {PLATFORM_LABELS[platform]} Branches
+            {platformLabel} Branches
           </h1>
-          <p className="text-sm text-brand-ink-3 mt-1 font-mono">
-            {platformResourceTotal} {platformResourceTotal === 1 ? "resource" : "resources"} on this platform.
-          </p>
+          {!platformRecord.isEnabled && (
+            <span className="text-[9px] font-bold px-2 py-1 rounded bg-orange-500/20 text-orange-400 uppercase tracking-widest">Platform Disabled</span>
+          )}
         </div>
+        <p className="text-sm text-brand-ink-3 font-mono -mt-2">
+          {platformResourceTotal} {platformResourceTotal === 1 ? "resource" : "resources"} on this platform.
+        </p>
       </div>
 
       {/* Branch cards */}

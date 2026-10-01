@@ -12,7 +12,20 @@ interface BranchLite {
   isEnabled: boolean;
 }
 
-export function CreateCustomerForm({ packages, branches }: { packages: any[]; branches: BranchLite[] }) {
+interface PlatformLite {
+  code: string;
+  name: string;
+}
+
+export function CreateCustomerForm({
+  packages,
+  branches,
+  platforms,
+}: {
+  packages: any[];
+  branches: BranchLite[];
+  platforms: PlatformLite[];
+}) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState<
     { success?: boolean; error?: string } | null,
@@ -25,7 +38,7 @@ export function CreateCustomerForm({ packages, branches }: { packages: any[]; br
     }
   }, [state, router]);
 
-  const [platform, setPlatform] = useState("ANDROID");
+  const [platform, setPlatform] = useState(platforms[0]?.code ?? "ANDROID");
   const platformBranches = branches.filter((b) => b.platformType === platform);
 
   return (
@@ -68,9 +81,9 @@ export function CreateCustomerForm({ packages, branches }: { packages: any[]; br
           className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors appearance-none"
           required
         >
-          <option value="ANDROID">Android</option>
-          <option value="IOS">iOS</option>
-          <option value="PC">PC</option>
+          {platforms.map((p) => (
+            <option key={p.code} value={p.code}>{p.name}</option>
+          ))}
         </select>
       </div>
 

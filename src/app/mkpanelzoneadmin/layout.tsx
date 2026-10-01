@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { LogOut, ExternalLink } from "lucide-react";
@@ -8,18 +6,29 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminSubmitButton } from "@/components/admin/AdminButton";
+import { getOwnerSession } from "@/lib/owner";
+import { listAllPlatforms } from "@/lib/platforms";
 import "@/components/admin/admin.css";
 
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Bypass session check as requested by the user
-  const agent = await prisma.agent.findFirst({
-    where: { role: "OWNER" }
-  });
+  /* Real server-side authorization. The owner has no login screen (by design):
+     access is granted by the private bootstrap URL, which sets the HttpOnly
+     `owner_session` cookie. Anything else gets a 404 — the panel's existence is
+     never revealed. */
+  const owner = await getOwnerSession();
+  if (!owner) notFound();
+
+  /* Platforms are needed by the sidebar grouping. Cheap, cached read. */
+  const platforms = await listAllPlatforms();
 
   return (
     <AdminToastProvider>
       <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-brand-red-500/30">
-        <AdminSidebar username={agent?.username || "Owner"} />
+        <AdminSidebar username={owner.username} platforms={platforms} />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0c]">

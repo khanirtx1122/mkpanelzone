@@ -71,12 +71,25 @@ export function Reveal({
 
     observer.observe(el);
 
+    /* Immediate in-viewport check. IntersectionObserver's first callback is
+       asynchronous, and an element that is already visible on load (or one
+       with a near-zero box that never satisfies the threshold) would sit at
+       opacity 0 until that callback lands. Measuring synchronously reveals it
+       on the first frame instead. */
+    const rect = el.getBoundingClientRect();
+    const viewportH = window.innerHeight || document.documentElement.clientHeight;
+    if (rect.top < viewportH && rect.bottom > 0) {
+      setShown(true);
+      if (once) observer.disconnect();
+    }
+
     // One-shot JS failsafe: if the observer never fires (killed tab, bfcache
-    // restore, observer teardown), force the element visible instead of
-    // leaving content stranded at opacity 0. A per-element timer is used
-    // rather than a page-wide CSS animation because pending animations can
-    // delay compositor work and stall unrelated transitions on weak devices.
-    const failsafe = window.setTimeout(() => setShown(true), 2500);
+    // restore, observer teardown, clipped container), force the element
+    // visible instead of leaving content stranded at opacity 0. A per-element
+    // timer is used rather than a page-wide CSS animation because pending
+    // animations can delay compositor work and stall unrelated transitions on
+    // weak devices.
+    const failsafe = window.setTimeout(() => setShown(true), 1200);
     return () => {
       observer.disconnect();
       window.clearTimeout(failsafe);

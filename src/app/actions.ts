@@ -154,7 +154,9 @@ Please verify my payment and send my access details.`;
 const loginSchema = z.object({
   identifier: z.string(),
   password: z.string(),
-  platform: z.enum(['ANDROID', 'IOS', 'PC']),
+  /* Platforms are dynamic (owner-managed), so the code is validated against
+     the database below rather than pinned to a compile-time union. */
+  platform: z.string().min(1).max(32),
   branchSlug: z.string().optional(),
 });
 
@@ -393,19 +395,18 @@ export async function managementLogin(formData: FormData) {
 // OWNER ACTIONS
 // ==========================================
 
+/**
+ * Owner authorization.
+ *
+ * Previously this only JSON-parsed the `agent_session` cookie and trusted
+ * `session.role === "OWNER"` — a forged cookie was enough to obtain owner
+ * privileges. It now delegates to the shared, database-verified
+ * `requireOwner()` (validates the `owner_session` cookie against an ACTIVE
+ * OWNER row) so a client cannot mint a session by hand.
+ */
 async function ensureOwner() {
-  const { cookies } = await import("next/headers");
-  const cookieStore = await cookies();
-  const sessionValue = cookieStore.get("agent_session")?.value;
-  if (!sessionValue) return null;
-  
-  try {
-    const session = JSON.parse(sessionValue);
-    if (session.role !== "OWNER") return null;
-    return session;
-  } catch {
-    return null;
-  }
+  const { requireOwner } = await import("@/lib/owner");
+  return requireOwner();
 }
 
 export async function toggleAgentStatus(id: string, currentStatus: string) {
@@ -573,6 +574,14 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
   
   if (!identifier || !password || !platformType) {
     return { success: false, error: "Identifier, password, and platform type are required." };
+  }
+
+  /* The platform comes from a client-controlled <select>, so it is verified
+     against the owner-managed platform table before anything is written. */
+  const { findPlatformByCode } = await import("@/lib/platforms");
+  const platformRecord = await findPlatformByCode(platformType);
+  if (!platformRecord || !platformRecord.isEnabled) {
+    return { success: false, error: "That platform is not available. Please pick another." };
   }
 
   const { ensureDefaultPackages } = await import("@/lib/auto-repair");

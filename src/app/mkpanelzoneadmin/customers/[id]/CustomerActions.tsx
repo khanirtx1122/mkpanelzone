@@ -21,7 +21,8 @@ export function CustomerActions({
   deviceCount,
   currentPlatform,
   currentPackageId,
-  packages
+  packages,
+  platforms
 }: { 
   customerId: string; 
   currentStatus: string;
@@ -29,6 +30,7 @@ export function CustomerActions({
   currentPlatform: string;
   currentPackageId: string;
   packages: any[];
+  platforms: { code: string; name: string }[];
 }) {
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const [passwordInput, setPasswordInput] = useState("");
@@ -207,9 +209,14 @@ export function CustomerActions({
                 }}
                 className="bg-white/5 border border-white/10 rounded-lg py-2.5 min-h-[44px] px-3 text-sm text-white focus:outline-none focus:border-brand-blue-500/50"
               >
-                <option value="ANDROID" className="bg-black text-white">Android</option>
-                <option value="IOS" className="bg-black text-white">iOS</option>
-                <option value="PC" className="bg-black text-white">PC</option>
+                <option value={currentPlatform} disabled className="bg-black text-white">
+                  {platforms.find((p) => p.code === currentPlatform)?.name ?? currentPlatform} (current)
+                </option>
+                {platforms
+                  .filter((p) => p.code !== currentPlatform)
+                  .map((p) => (
+                    <option key={p.code} value={p.code} className="bg-black text-white">{p.name}</option>
+                  ))}
               </select>
               
               <select

@@ -6,6 +6,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { findPlatformByCode } from "@/lib/platforms";
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
@@ -64,12 +65,17 @@ export default async function DashboardPage() {
 
   const allResources = [...(customer.package?.resources || []), ...globalResources];
 
+  /* Friendly platform name for the dashboard badge — resolved from the
+     platform table so a newly created platform reads correctly. */
+  const platformRecord = await findPlatformByCode(customer.platformType);
+
   return (
     <DashboardClient
       identifier={customer.identifier}
       packageName={customer.package?.name || "No Package"}
       resources={allResources}
       platformType={customer.platformType}
+      platformName={platformRecord?.name}
       branchName={customer.branch?.name || null}
       warning={
         customer.branch?.warningEnabled

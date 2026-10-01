@@ -21,6 +21,7 @@ import {
   Palette, 
   LifeBuoy, 
   Gift,
+  Globe,
   Settings, 
   ScrollText 
 } from "lucide-react";
@@ -65,6 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Access",
     items: [
+      { name: "Platforms", href: "/mkpanelzoneadmin/platforms", icon: Globe },
       { name: "Platform Resources", href: "/mkpanelzoneadmin/resources", icon: HardDrive },
       { name: "Packages", href: "/mkpanelzoneadmin/packages", icon: Layers },
     ]
@@ -90,9 +92,30 @@ const NAV_GROUPS: NavGroup[] = [
   }
 ];
 
-export function AdminSidebar({ username }: { username: string }) {
+export function AdminSidebar({
+  username,
+  platforms = [],
+}: {
+  username: string;
+  /** Platform list is passed in so the Access group reflects the live data. */
+  platforms?: { code: string; name: string; isEnabled: boolean }[];
+}) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  /* Live platform shortcuts under Access — purely additive navigation, so a
+     newly created platform is one click away without editing this file. */
+  const platformItems: NavItem[] = platforms.map((p) => ({
+    name: p.isEnabled ? p.name : `${p.name} (off)`,
+    href: `/mkpanelzoneadmin/resources/platform/${p.code}`,
+    icon: Layers,
+  }));
+
+  const groups: NavGroup[] = platformItems.length
+    ? NAV_GROUPS.map((g) =>
+        g.label === "Access" ? { ...g, items: [...g.items, ...platformItems] } : g
+      )
+    : NAV_GROUPS;
 
   // Escape closes the drawer; lock scroll while open.
   useEffect(() => {
@@ -183,7 +206,7 @@ export function AdminSidebar({ username }: { username: string }) {
 
         {/* Scrollable Navigation */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 styled-scrollbar">
-          {NAV_GROUPS.map((group, i) => (
+          {groups.map((group, i) => (
             <div key={i} className="mb-6 last:mb-0">
               <p className="px-4 text-[11px] font-bold tracking-widest text-brand-ink-3 uppercase mb-2">
                 {group.label}

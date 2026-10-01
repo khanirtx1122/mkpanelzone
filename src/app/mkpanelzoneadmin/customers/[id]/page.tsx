@@ -1,27 +1,35 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Monitor, Smartphone, Key, PackageOpen, CreditCard, Tag } from "lucide-react";
+import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Key, PackageOpen, CreditCard, Tag } from "lucide-react";
 import { CustomerActions } from "./CustomerActions";
+import { listAllPlatforms } from "@/lib/platforms";
+import { PlatformBadgeIcon } from "../../resources/PlatformBadgeIcon";
 
 export default async function CustomerDetailsPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const customer = await prisma.customer.findUnique({
-    where: { id: params.id },
-    include: {
-      agent: { select: { username: true } },
-      package: { select: { id: true, name: true } },
-      devices: true
-    }
-  });
 
-  const packages = await prisma.package.findMany({
-    orderBy: { name: "asc" }
-  });
+  /* Customer, package catalogue and platform list load in one round-trip. */
+  const [customer, packages, platforms] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: params.id },
+      include: {
+        agent: { select: { username: true } },
+        package: { select: { id: true, name: true } },
+        devices: { select: { id: true } },
+      },
+    }),
+    prisma.package.findMany({
+      orderBy: { name: "asc" }
+    }),
+    listAllPlatforms(),
+  ]);
 
   if (!customer) {
     notFound();
   }
+
+  const platformLabel = platforms.find((p) => p.code === customer.platformType)?.name ?? customer.platformType;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -34,8 +42,11 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-extrabold text-white tracking-tight">{customer.identifier}</h1>
             <span className="px-3 py-1 rounded bg-white/10 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-              {customer.platformType === "PC" ? <Monitor size={14} /> : <Smartphone size={14} />}
-              {customer.platformType}
+              <PlatformBadgeIcon
+                iconKey={platforms.find((p) => p.code === customer.platformType)?.iconKey}
+                size={14}
+              />
+              {platformLabel}
             </span>
             {customer.status === "active" ? (
               <span className="px-3 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-bold uppercase tracking-wider border border-green-500/20 flex items-center gap-1"><ShieldCheck size={14}/> Active</span>
@@ -116,6 +127,7 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
             currentPlatform={customer.platformType}
             currentPackageId={customer.packageId || ""}
             packages={packages}
+            platforms={platforms.map((p) => ({ code: p.code, name: p.name }))}
           />
         </div>
       </div>

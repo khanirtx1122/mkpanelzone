@@ -1,13 +1,17 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { agentCreateCustomer } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import { Upload, CheckCircle2 } from "lucide-react";
 
-export function CreateCustomerForm() {
+export function CreateCustomerForm({
+  platforms,
+}: {
+  platforms: { code: string; name: string }[];
+}) {
   const [state, formAction, pending] = useActionState<any, FormData>(agentCreateCustomer, null);
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -18,6 +22,8 @@ export function CreateCustomerForm() {
       router.refresh();
     }
   }, [state, router]);
+
+  const [platform, setPlatform] = useState(platforms[0]?.code ?? "ANDROID");
 
   return (
     <form ref={formRef} action={formAction} className="space-y-5">
@@ -36,11 +42,13 @@ export function CreateCustomerForm() {
         <select 
           name="platformType" 
           required 
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
           className="w-full bg-foreground/5 border border-border-subtle rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-brand-blue-500/50 transition-colors"
         >
-          <option value="ANDROID">ANDROID</option>
-          <option value="IOS">IPHONE (IOS)</option>
-          <option value="PC">PC</option>
+          {platforms.map((p) => (
+            <option key={p.code} value={p.code}>{p.name}</option>
+          ))}
         </select>
         <p className="text-xs text-brand-ink-3">The default package for the selected platform will be automatically assigned.</p>
       </div>

@@ -5,13 +5,20 @@ import { adminCreateBranch } from "@/app/mkpanelzoneadmin/actions";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export function CreateBranchForm({ platform }: { platform: string }) {
+export function CreateBranchForm({
+  platform,
+  platforms,
+}: {
+  platform: string;
+  platforms: { code: string; name: string }[];
+}) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(adminCreateBranch, null);
   const [name, setName] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState(platform);
 
   if (state?.success) {
-    setTimeout(() => router.push(`/mkpanelzoneadmin/resources?platform=${platform}`), 600);
+    setTimeout(() => router.push(`/mkpanelzoneadmin/resources/platform/${selectedPlatform}`), 600);
   }
 
   return (
@@ -27,7 +34,20 @@ export function CreateBranchForm({ platform }: { platform: string }) {
         </div>
       )}
 
-      <input type="hidden" name="platformType" value={platform} />
+      <div>
+        <label className="block text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-2">Platform</label>
+        <select
+          name="platformType"
+          value={selectedPlatform}
+          onChange={(e) => setSelectedPlatform(e.target.value)}
+          className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors appearance-none"
+          required
+        >
+          {platforms.map((p) => (
+            <option key={p.code} value={p.code}>{p.name}</option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label className="block text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-2">Branch Name</label>

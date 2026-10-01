@@ -4,21 +4,26 @@ import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { FREE_PANEL_SETTING_KEY, sanitizeUrl } from "@/lib/freePanel";
-import { revalidatePath as _revalidate } from "next/cache";
 import { isValidBranchSlug } from "@/lib/branches";
+import { requireOwner } from "@/lib/owner";
 
+/**
+ * Owner authorization for every server action below.
+ *
+ * Returns the verified owner session, or null for anyone else. Actions return
+ * a generic "Unauthorized" result rather than throwing so a stale cookie never
+ * produces a crash.
+ */
 async function ensureOwner() {
-  // Bypass session check as requested by the user
-  return { role: "OWNER", username: "Owner" };
+  return requireOwner();
 }
 
 export async function ownerLogout() {
-  const { cookies } = await import("next/headers");
   const { redirect } = await import("next/navigation");
   const cookieStore = await cookies();
   cookieStore.delete("owner_session");
-  // Don't redirect to an owner specific route that gives away its existence, maybe just home
   redirect("/");
 }
 
@@ -37,7 +42,11 @@ export async function adminCreateBranch(prevState: any, formData: FormData) {
   const slug = rawSlug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
   if (!name || !slug) return { success: false, error: "Branch name is required." };
-  if (!["ANDROID", "IOS", "PC"].includes(platformType)) {
+
+  /* Platform validation comes from the database, not a hardcoded list, so a
+     platform the owner created in Admin works here immediately. */
+  const platform = await prisma.platform.findUnique({ where: { code: platformType } });
+  if (!platform) {
     return { success: false, error: "Invalid platform." };
   }
   if (!isValidBranchSlug(slug)) {
@@ -136,15 +145,24 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
   const owner = await ensureOwner();
   if (!owner) return { success: false, error: "Unauthorized" };
 
-  const identifier = formData.get("identifier") as string;
-  const password = formData.get("password") as string;
-  const platformType = formData.get("platformType") as string;
-  const branchId = (formData.get("branchId") as string) || null;
-  const packageId = formData.get("packageId") as string;
+  const identifier = ((formData.get("identifier") as string) || "").trim();
+  const password = (formData.get("password") as string) || "";
+  const platformType = ((formData.get("platformType") as string) || "").toUpperCase();
+  let branchId = ((formData.get("branchId") as string) || "") || null;
+  let packageId = ((formData.get("packageId") as string) || "") || null;
   const status = (formData.get("status") as string) || "active";
 
-  if (!identifier || !password || !platformType || !packageId) {
-    return { success: false, error: "All fields are required." };
+  if (!identifier || !password || !platformType) {
+    return { success: false, error: "Customer ID, password and platform are required." };
+  }
+  if (password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters." };
+  }
+
+  /* Platform must exist in the database — never trust the submitted value. */
+  const platform = await prisma.platform.findUnique({ where: { code: platformType } });
+  if (!platform) {
+    return { success: false, error: "Invalid platform." };
   }
 
   const existing = await prisma.customer.findUnique({ where: { identifier } });
@@ -152,48 +170,72 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
     return { success: false, error: "Customer ID already exists." };
   }
 
-  const pkg = await prisma.package.findUnique({ where: { id: packageId } });
-  if (!pkg || pkg.platformType !== platformType) {
-    return { success: false, error: "Invalid package for this platform." };
-  }
-
-  /* Branch validation: if the platform has enabled branches, the owner must
-     pick one, and it must belong to the chosen platform. */
+  /* ── Branch resolution ───────────────────────────────────────────────────
+     If the platform has enabled branches the owner must pick one and it must
+     belong to this platform. If it has none, a Default branch is provisioned
+     so a brand-new platform works without manual setup. */
   const platformBranches = await prisma.platformBranch.findMany({
     where: { platformType, isEnabled: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true },
   });
-  let branchIdToSet: string | null = null;
+
   if (platformBranches.length > 0) {
     const chosen = platformBranches.find((b) => b.id === branchId);
     if (!chosen) {
       return { success: false, error: "Please choose a branch for this platform." };
     }
-    branchIdToSet = chosen.id;
-  } else if (branchId) {
-    const chosen = await prisma.platformBranch.findUnique({ where: { id: branchId } });
-    if (!chosen || chosen.platformType !== platformType) {
-      return { success: false, error: "Invalid branch for this platform." };
-    }
-    branchIdToSet = chosen.id;
+    branchId = chosen.id;
+  } else {
+    const { ensurePlatformBranch } = await import("@/lib/auto-repair");
+    branchId = await ensurePlatformBranch(platformType);
   }
 
-  const argon2 = await import("argon2");
-  const passwordHash = await argon2.hash(password);
-
-  await prisma.customer.create({
-    data: {
-      identifier,
-      passwordHash,
-      platformType,
-      branchId: branchIdToSet,
-      packageId,
-      status,
-      createdSource: "OWNER",
+  /* ── Package resolution ──────────────────────────────────────────────────
+     An explicit package must belong to the platform. Otherwise fall back to
+     the platform's default agent package, provisioning one if needed. */
+  if (packageId) {
+    const pkg = await prisma.package.findUnique({ where: { id: packageId } });
+    if (!pkg || pkg.platformType !== platformType) {
+      return { success: false, error: "Invalid package for this platform." };
     }
-  });
+    packageId = pkg.id;
+  } else {
+    const { ensureDefaultPackages } = await import("@/lib/auto-repair");
+    await ensureDefaultPackages();
+    const fallback = await prisma.package.findFirst({
+      where: { platformType, isDefaultForAgents: true },
+      select: { id: true },
+    });
+    if (!fallback) {
+      return { success: false, error: `No default package configured for ${platform.name}.` };
+    }
+    packageId = fallback.id;
+  }
 
-  revalidatePath("/mkpanelzoneadmin/customers");
-  return { success: true };
+  try {
+    const argon2 = await import("argon2");
+    const passwordHash = await argon2.hash(password);
+
+    await prisma.customer.create({
+      data: {
+        identifier,
+        passwordHash,
+        platformType,
+        branchId,
+        packageId,
+        status,
+        createdSource: "OWNER_ADMIN",
+      },
+    });
+
+    revalidatePath("/mkpanelzoneadmin/customers");
+    revalidatePath("/mkpanelzoneadmin");
+    return { success: true };
+  } catch (error) {
+    console.error("[adminCreateCustomer]", error);
+    return { success: false, error: "Unable to create customer. Please try again." };
+  }
 }
 
 export async function adminUpdateCustomerStatus(id: string, newStatus: string) {
@@ -209,6 +251,7 @@ export async function adminUpdateCustomerStatus(id: string, newStatus: string) {
     revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to update status." };
   }
 }
@@ -226,6 +269,7 @@ export async function adminSetCustomerPassword(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to set new password." };
   }
 }
@@ -242,6 +286,7 @@ export async function adminResetCustomerDevice(customerId: string) {
     revalidatePath(`/mkpanelzoneadmin/customers/${customerId}`);
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to reset device." };
   }
 }
@@ -251,6 +296,11 @@ export async function adminChangeCustomerPlatform(id: string, platformType: stri
   if (!owner) return { error: "Unauthorized" };
 
   try {
+    /* Platform must be a real, known platform. */
+    const platform = await prisma.platform.findUnique({ where: { code: platformType } });
+    if (!platform) return { error: "Invalid platform." };
+
+    /* A package must belong to the target platform — never leave a mismatch. */
     if (packageId) {
       const pkg = await prisma.package.findUnique({ where: { id: packageId } });
       if (!pkg || pkg.platformType !== platformType) {
@@ -258,14 +308,27 @@ export async function adminChangeCustomerPlatform(id: string, platformType: stri
       }
     }
 
-    await prisma.customer.update({
-      where: { id },
-      data: { platformType, packageId: packageId || null }
+    /* Move the customer to a branch belonging to the NEW platform, otherwise
+       they would be stranded pointing at a branch from their old platform. */
+    const targetBranch = await prisma.platformBranch.findFirst({
+      where: { platformType, isEnabled: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
     });
+
+    const data: { platformType: string; packageId: string | null; branchId?: string | null } = {
+      platformType,
+      packageId: packageId || null,
+    };
+    if (targetBranch) data.branchId = targetBranch.id;
+
+    await prisma.customer.update({ where: { id }, data });
+
     revalidatePath("/mkpanelzoneadmin/customers");
     revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
     return { success: true };
   } catch (error) {
+    console.error("[adminChangeCustomerPlatform]", error);
     return { error: "Failed to update platform/package." };
   }
 }
@@ -319,6 +382,7 @@ export async function adminToggleAgentStatus(id: string, currentStatus: string) 
     revalidatePath(`/mkpanelzoneadmin/agents/${id}`);
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to update agent status." };
   }
 }
@@ -336,6 +400,7 @@ export async function adminSetAgentPassword(id: string, newPass: string) {
     });
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to reset password." };
   }
 }
@@ -360,6 +425,7 @@ export async function updateOrderStatus(formData: FormData) {
     revalidatePath(`/mkpanelzoneadmin/orders/${orderId}`);
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to update order status." };
   }
 }
@@ -385,6 +451,7 @@ export async function toggleProductStatus(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/products");
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to toggle product status." };
   }
 }
@@ -400,6 +467,7 @@ export async function deleteProduct(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/products");
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to delete product." };
   }
 }
@@ -425,6 +493,7 @@ export async function togglePaymentMethod(formData: FormData) {
     revalidatePath("/mkpanelzoneadmin/payments");
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to toggle payment method." };
   }
 }
@@ -447,9 +516,18 @@ export async function toggleResourceStatus(formData: FormData) {
       where: { id: resourceId },
       data: { status: resource.status === "active" ? "inactive" : "active" }
     });
+    /* Revalidate every surface that lists this resource — the branch detail
+       page was previously missed, so its list went stale after a toggle. */
     revalidatePath("/mkpanelzoneadmin/resources");
+    revalidatePath("/mkpanelzoneadmin/resources/all");
+    revalidatePath(`/mkpanelzoneadmin/resources/${resourceId}`);
+    if (resource.branchId) {
+      revalidatePath(`/mkpanelzoneadmin/resources/platform/${resource.platformType}/${resource.branchId}`);
+    }
+    revalidatePath(`/mkpanelzoneadmin/resources/platform/${resource.platformType}`);
     return { success: true };
   } catch (error) {
+    console.error("[toggleResourceStatus]", error);
     return { error: "Failed to toggle resource status." };
   }
 }
@@ -501,6 +579,7 @@ export async function saveSettings(formData: FormData) {
     
     return { success: true };
   } catch (error) {
+    console.error("[admin action] failed:", error);
     return { error: "Failed to save settings." };
   }
 }
@@ -511,6 +590,8 @@ export async function saveSettings(formData: FormData) {
  * key string; badly formatted lines are counted and skipped.
  */
 export async function importFreePanelKeys(formData: FormData): Promise<void> {
+  const owner = await requireOwner();
+  if (!owner) return;
   try {
     const raw = (formData.get("keys") as string | null) ?? "";
     const batchNotes = (formData.get("notes") as string | null)?.trim() || null;
@@ -583,6 +664,8 @@ function generateOwnerFormatKey(): string {
 }
 
 export async function generateFreePanelKeys(formData: FormData): Promise<void> {
+  const owner = await requireOwner();
+  if (!owner) return;
   let inserted = 0;
   let count = 10;
   try {
@@ -619,6 +702,8 @@ export async function generateFreePanelKeys(formData: FormData): Promise<void> {
 
 /** Disable or re-enable selected keys (owner action from inventory list). */
 export async function setFreePanelKeyStatus(formData: FormData): Promise<void> {
+  const owner = await requireOwner();
+  if (!owner) return;
   try {
     const keyId = formData.get("keyId") as string | null;
     const status = formData.get("status") as string | null;
@@ -639,6 +724,8 @@ export async function setFreePanelKeyStatus(formData: FormData): Promise<void> {
  * All owner URLs are sanitized server-side: only https:// (or internal relative) survive.
  */
 export async function saveFreePanelConfig(formData: FormData): Promise<void> {
+  const owner = await requireOwner();
+  if (!owner) return;
   try {
     const str = (k: string) => (formData.get(k) as string | null)?.trim() ?? "";
     const num = (k: string, fallback: number, min: number, max: number) => {

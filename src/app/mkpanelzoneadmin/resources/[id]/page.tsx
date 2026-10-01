@@ -4,6 +4,7 @@ import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { DeleteResourceButton } from "../DeleteResourceButton";
+import { listAllPlatforms, findPlatformByCode } from "@/lib/platforms";
 
 export default async function EditResourcePage(props: { 
   params: Promise<{ id: string }>,
@@ -27,18 +28,28 @@ export default async function EditResourcePage(props: {
     if (!resource) return notFound();
   }
 
-  const packages = await prisma.package.findMany({
-    where: platformFilter ? { platformType: platformFilter } : {},
-    orderBy: { name: "asc" }
-  });
+  const [packages, allBranches, platforms] = await Promise.all([
+    prisma.package.findMany({
+      where: platformFilter ? { platformType: platformFilter } : {},
+      orderBy: { name: "asc" }
+    }),
+    prisma.platformBranch.findMany({
+      orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
+    }),
+    listAllPlatforms(),
+  ]);
 
-  const allBranches = await prisma.platformBranch.findMany({
-    orderBy: [{ platformType: "asc" }, { sortOrder: "asc" }],
-  });
+  /* Packages grouped by platform for the <optgroup> picker — derived from the
+     platform table so a new platform appears without a source change. */
+  const packagesByPlatform = new Map<string, typeof packages>();
+  for (const pkg of packages) {
+    const list = packagesByPlatform.get(pkg.platformType) ?? [];
+    list.push(pkg);
+    packagesByPlatform.set(pkg.platformType, list);
+  }
 
-  const androidPackages = packages.filter(p => p.platformType === "ANDROID");
-  const iosPackages = packages.filter(p => p.platformType === "IOS");
-  const pcPackages = packages.filter(p => p.platformType === "PC");
+  const platformLabel = (code: string) =>
+    platforms.find((p) => p.code === code)?.name ?? code;
 
   async function saveResource(formData: FormData) {
     "use server";
@@ -55,6 +66,13 @@ export default async function EditResourcePage(props: {
     const status = formData.get("status") as string;
 
     try {
+      /* The platform code arrives from a client <select>, so it is validated
+         against the owner-managed table before anything is persisted. */
+      const platformRecord = await findPlatformByCode(platformType);
+      if (!platformRecord) {
+        throw new Error("Invalid platform selected");
+      }
+
       if (packageId) {
         const pkg = await prisma.package.findUnique({ where: { id: packageId } });
         if (!pkg) {
@@ -132,13 +150,13 @@ export default async function EditResourcePage(props: {
               <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">Platform Type</label>
               <select 
                 name="platformType"
-                defaultValue={resource?.platformType || platformFilter || "ANDROID"}
+                defaultValue={resource?.platformType || platformFilter || platforms[0]?.code || ""}
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
                 required
               >
-                <option value="ANDROID">ANDROID</option>
-                <option value="IOS">IPHONE / IOS</option>
-                <option value="PC">PC</option>
+                {platforms.map((p) => (
+                  <option key={p.code} value={p.code}>{p.name}</option>
+                ))}
               </select>
               <p className="text-[10px] text-brand-ink-3 mt-1">If a package is selected below, its platform must match this.</p>
             </div>
@@ -151,27 +169,17 @@ export default async function EditResourcePage(props: {
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
               >
                 <option value="">-- No Specific Package --</option>
-                {androidPackages.length > 0 && (
-                  <optgroup label="ANDROID PACKAGES">
-                    {androidPackages.map(pkg => (
-                      <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {iosPackages.length > 0 && (
-                  <optgroup label="IPHONE / IOS PACKAGES">
-                    {iosPackages.map(pkg => (
-                      <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {pcPackages.length > 0 && (
-                  <optgroup label="PC PACKAGES">
-                    {pcPackages.map(pkg => (
-                      <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
-                    ))}
-                  </optgroup>
-                )}
+                {platforms.map((p) => {
+                  const list = packagesByPlatform.get(p.code);
+                  if (!list || list.length === 0) return null;
+                  return (
+                    <optgroup key={p.code} label={`${p.name.toUpperCase()} PACKAGES`}>
+                      {list.map((pkg) => (
+                        <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             </div>
 
@@ -187,7 +195,7 @@ export default async function EditResourcePage(props: {
                   <optgroup label="BRANCHES">
                     {allBranches.map(branch => (
                       <option key={branch.id} value={branch.id}>
-                        {branch.platformType === "IOS" ? "IPHONE" : branch.platformType} — {branch.name}
+                        {platformLabel(branch.platformType)} — {branch.name}
                       </option>
                     ))}
                   </optgroup>

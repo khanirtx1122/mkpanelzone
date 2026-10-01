@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { CreateAgentForm } from "./CreateAgentForm";
-import { UserPlus, ShieldAlert, ShieldCheck } from "lucide-react";
+import { UserPlus, ShieldAlert, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { AgentFilters } from "./AgentFilters";
 import Link from "next/link";
 
@@ -8,26 +8,49 @@ export const metadata = {
   title: "Manage Agents | Owner Panel",
 };
 
+const PAGE_SIZE = 25;
+
 export default async function ManageAgentsPage(props: {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
   const q = searchParams?.q as string || "";
   const statusFilter = searchParams?.status as string || "ALL";
+  const page = Math.max(1, parseInt((searchParams?.page as string) || "1", 10) || 1);
 
-  const agents = await prisma.agent.findMany({
-    where: { 
-      role: "AGENT",
-      ...(q ? { username: { contains: q } } : {}),
-      ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: {
-        select: { createdCustomers: true }
+  const where = {
+    role: "AGENT" as const,
+    ...(q ? { username: { contains: q } } : {}),
+    ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
+  };
+
+  /* Paginated: the agent directory was previously loaded in full on every
+     render, including a per-agent customer count. */
+  const [agents, total] = await Promise.all([
+    prisma.agent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        _count: {
+          select: { createdCustomers: true }
+        }
       }
-    }
-  });
+    }),
+    prisma.agent.count({ where }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const buildPageUrl = (p: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/mkpanelzoneadmin/agents${qs ? `?${qs}` : ""}`;
+  };
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
@@ -74,6 +97,36 @@ export default async function ManageAgentsPage(props: {
             ))
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/5">
+            <p className="text-xs font-mono text-brand-ink-3">
+              Page {page} of {totalPages} · {total} agents
+            </p>
+            <div className="flex items-center gap-2">
+              <Link
+                href={buildPageUrl(Math.max(1, page - 1))}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                  page <= 1
+                    ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                    : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+                }`}
+              >
+                <ChevronLeft size={14} /> Prev
+              </Link>
+              <Link
+                href={buildPageUrl(Math.min(totalPages, page + 1))}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                  page >= totalPages
+                    ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                    : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+                }`}
+              >
+                Next <ChevronRight size={14} />
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Create Agent Form */}

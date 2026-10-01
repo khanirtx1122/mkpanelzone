@@ -3,10 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { listAllPlatforms, findPlatformByCode } from "@/lib/platforms";
 
 export default async function EditPackagePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const isNew = params.id === "new";
+
+  const platforms = await listAllPlatforms();
 
   let pkg = null;
   if (!isNew) {
@@ -25,6 +28,13 @@ export default async function EditPackagePage(props: { params: Promise<{ id: str
     const isDefaultForAgents = formData.get("isDefaultForAgents") === "true";
 
     try {
+      /* Platform comes from a client <select> — validated server-side so a
+         package can only ever be attached to a real, owner-managed platform. */
+      const platformRecord = await findPlatformByCode(platformType);
+      if (!platformRecord) {
+        throw new Error("Invalid platform selected");
+      }
+
       if (isDefaultForAgents) {
         // Unset any existing default for this platform
         await prisma.package.updateMany({
@@ -99,12 +109,14 @@ export default async function EditPackagePage(props: { params: Promise<{ id: str
                 <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">Platform</label>
                 <select
                   name="platformType"
-                  defaultValue={pkg?.platformType || "ANDROID"}
+                  defaultValue={pkg?.platformType || platforms[0]?.code || ""}
                   className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
                 >
-                  <option value="ANDROID">ANDROID</option>
-                  <option value="IOS">IPHONE / IOS</option>
-                  <option value="PC">PC</option>
+                  {platforms.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}{!p.isEnabled ? " (disabled)" : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

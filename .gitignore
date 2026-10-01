@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local dev logs / scratch output
+.freebuff/
+*.dev.log
+*.dev.err
+
+# local tooling state (agent memory, not part of the app)
+.workbuddy-ai/
+
+# local session/cookie scratch files
+cookies.txt

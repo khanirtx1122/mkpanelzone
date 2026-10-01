@@ -1,35 +1,41 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 /**
- * Route-transition feedback: thin cobalt progress rail under the header plus a
- * subtle page fade on every admin navigation. Pure CSS transform/opacity.
+ * Route-transition feedback: a thin cobalt progress rail under the header.
+ *
+ * Performance note — the previous implementation changed a `key` on the
+ * wrapper div for every path OR query change, which tore down and re-mounted
+ * the entire page subtree on every filter click and pagination step. That was
+ * a major source of the admin feeling slow. The page content is now rendered
+ * once and never re-keyed; only the decorative rail reacts to navigation.
+ *
  * Suspense boundary required because useSearchParams is used (Next.js requirement).
  */
 function RouteFeedback({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [navKey, setNavKey] = useState(0);
   const [navigating, setNavigating] = useState(false);
+  const firstRender = useRef(true);
 
   useEffect(() => {
-    // Any change to path or query params = a completed navigation → restart
-    // the fade, and kill the progress rail shortly after.
-    setNavKey((k) => k + 1);
+    // Skip the initial mount — nothing is "navigating" on first paint.
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
     setNavigating(true);
-    const t = window.setTimeout(() => setNavigating(false), 750);
+    const t = window.setTimeout(() => setNavigating(false), 700);
     return () => window.clearTimeout(t);
   }, [pathname, searchParams]);
 
   return (
     <>
       {navigating && <span className="route-progress" aria-hidden />}
-      <div key={navKey} className="route-fade">
-        {children}
-      </div>
+      {children}
     </>
   );
 }

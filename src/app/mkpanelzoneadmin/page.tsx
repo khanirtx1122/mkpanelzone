@@ -1,27 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Users, UserPlus, Smartphone, Monitor } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import { getAnalyticsSnapshot } from "@/lib/analyticsAdmin";
 import { AnalyticsOverview } from "@/components/admin/AnalyticsOverview";
+import { listAllPlatforms } from "@/lib/platforms";
+import { PlatformBadgeIcon } from "./resources/PlatformBadgeIcon";
 
 export const metadata = {
   title: "Dashboard | Owner Panel",
 };
 
-const getPlatformIcon = (platform: string) => {
-  switch (platform) {
-    case 'ANDROID':
-    case 'IOS':
-      return <Smartphone size={24} />;
-    default:
-      return <Monitor size={24} />;
-  }
-};
-
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
-  const [totalAgents, totalCustomers, customersByPlatform, analytics] = await Promise.all([
+  const [totalAgents, totalCustomers, customersByPlatform, platforms, analytics] = await Promise.all([
     prisma.agent.count({ where: { role: "AGENT" } }),
     prisma.customer.count(),
     prisma.customer.groupBy({
@@ -30,6 +22,7 @@ export default async function AdminDashboardPage() {
         platformType: true
       }
     }),
+    listAllPlatforms(),
     // Real recorded traffic only — the dashboard renders zeros when empty.
     getAnalyticsSnapshot(),
   ]);
@@ -70,18 +63,18 @@ export default async function AdminDashboardPage() {
       <div>
         <h2 className="text-sm font-bold text-brand-ink-3 mb-6 uppercase tracking-widest border-b border-white/5 pb-4">Customers by Platform</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {['ANDROID', 'IOS', 'PC'].map((platform) => {
-            const count = customersByPlatform.find(c => c.platformType === platform)?._count.platformType || 0;
+          {platforms.map((platform) => {
+            const count = customersByPlatform.find(c => c.platformType === platform.code)?._count.platformType || 0;
             return (
               <Link 
-                key={platform}
-                href={`/mkpanelzoneadmin/customers?platform=${platform}`}
+                key={platform.id}
+                href={`/mkpanelzoneadmin/customers?platform=${platform.code}`}
                 className="block p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 flex flex-col items-center text-center group"
               >
                 <div className="w-12 h-12 rounded-xl bg-black border border-white/10 text-brand-ink-2 group-hover:text-white flex items-center justify-center mb-4 transition-colors">
-                  {getPlatformIcon(platform)}
+                  <PlatformBadgeIcon iconKey={platform.iconKey} size={24} />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-1 tracking-wider">{platform}</h3>
+                <h3 className="text-lg font-bold text-white mb-1 tracking-wider">{platform.name}</h3>
                 <p className="text-3xl font-black text-brand-ink-2 group-hover:text-white transition-colors">{count}</p>
               </Link>
             );

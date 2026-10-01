@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Plus, Edit, Link as LinkIcon, Power, PowerOff, Filter, GitBranch } from "lucide-react";
 import { toggleResourceStatus } from "../../actions";
 import { BranchManager } from "../BranchManager";
+import { listAllPlatforms } from "@/lib/platforms";
 
 export default async function ResourcesPage(props: {
   searchParams?: Promise<{ packageId?: string; platform?: string; branchId?: string }>;
@@ -11,6 +12,8 @@ export default async function ResourcesPage(props: {
   const packageIdFilter = searchParams?.packageId || "";
   const platformFilter = searchParams?.platform || "";
   const branchIdFilter = searchParams?.branchId || "";
+
+  const platformList = await listAllPlatforms();
 
   const packages = await prisma.package.findMany({
     where: platformFilter ? { platformType: platformFilter } : {},
@@ -95,15 +98,18 @@ export default async function ResourcesPage(props: {
               >
                 All Platforms
               </Link>
-              {["ANDROID", "IOS", "PC"].map(plat => (
+              {platformList.map((plat) => (
                 <Link
-                  key={plat}
-                  href={buildUrl({ platform: plat, packageId: "", branchId: "" })}
-                  className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap ${
-                    platformFilter === plat ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
+                  key={plat.code}
+                  href={buildUrl({ platform: plat.code, packageId: "", branchId: "" })}
+                  className={`px-3 py-1.5 text-xs font-bold tracking-wider rounded-lg transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
+                    platformFilter === plat.code ? "bg-brand-blue-500/20 text-brand-blue-400 border border-brand-blue-500/30" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
                   }`}
                 >
-                  {plat === "IOS" ? "IPHONE / IOS" : plat}
+                  {plat.name}
+                  {!plat.isEnabled && (
+                    <span className="text-[8px] px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 uppercase">off</span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -124,7 +130,7 @@ export default async function ResourcesPage(props: {
                     !branchIdFilter ? "bg-white/10 text-white border border-white/20" : "text-brand-ink-3 hover:text-white hover:bg-white/5 border border-transparent"
                   }`}
                 >
-                  All {platformFilter}
+                  All {platformList.find((p) => p.code === platformFilter)?.name ?? platformFilter}
                 </Link>
                 {branches.map(branch => (
                   <Link

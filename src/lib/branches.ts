@@ -101,6 +101,73 @@ export async function ensureDefaultBranches() {
 }
 
 /**
+ * Guarantees that a platform which is in use has at least one enabled branch.
+ *
+ * Branch selection is part of both the public Access flow and the customer
+ * dashboard. A platform with customers but no branches would dead-end, so this
+ * provisions a `Default` branch on demand. Safe to call on every request: the
+ * fast path is a single indexed lookup that most platforms satisfy.
+ *
+ * Returns the branch that should be used as the platform's fallback.
+ */
+export async function ensurePlatformHasBranch(platformCode: string): Promise<string | null> {
+  const existing = await prisma.platformBranch.findFirst({
+    where: { platformType: platformCode, isEnabled: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const platform = await prisma.platform.findUnique({
+    where: { code: platformCode },
+    select: { name: true },
+  });
+
+  const created = await prisma.platformBranch.create({
+    data: {
+      platformType: platformCode,
+      name: "Default",
+      slug: "default",
+      description: `Default ${platform?.name ?? platformCode} section.`,
+      isEnabled: true,
+      sortOrder: 0,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
+ * Prepares every platform that currently has customers or active resources so
+ * the Access screen and customer creation form always have something to show.
+ * Runs a bounded number of queries (one per platform-with-data), never N+1
+ * across customers.
+ */
+export async function ensureBranchesForActivePlatforms(): Promise<void> {
+  const [withCustomers, withResources] = await Promise.all([
+    prisma.customer.groupBy({ by: ["platformType"], _count: true }),
+    prisma.packageResource.groupBy({ by: ["platformType"], _count: true }),
+  ]);
+
+  const codes = new Set<string>();
+  for (const row of withCustomers) if (row.platformType) codes.add(row.platformType);
+  for (const row of withResources) if (row.platformType) codes.add(row.platformType);
+  if (codes.size === 0) return;
+
+  const existing = await prisma.platformBranch.findMany({
+    where: { platformType: { in: Array.from(codes) }, isEnabled: true },
+    select: { platformType: true },
+    distinct: ["platformType"],
+  });
+  const covered = new Set(existing.map((b) => b.platformType));
+
+  const missing = Array.from(codes).filter((c) => !covered.has(c));
+  if (missing.length === 0) return;
+
+  await Promise.all(missing.map((code) => ensurePlatformHasBranch(code)));
+}
+
+/**
  * Retires the legacy "Elite Panel Access" package: re-points its customers
  * and resources to the platform's default package bound to the branch's
  * default (AIM Plus Holo), then marks the old package retired via flag.

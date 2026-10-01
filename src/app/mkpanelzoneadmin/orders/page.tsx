@@ -1,13 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+
+const PAGE_SIZE = 25;
 
 export default async function OrdersPage(props: {
-  searchParams?: Promise<{ status?: string; query?: string }>;
+  searchParams?: Promise<{ status?: string; query?: string; page?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const statusFilter = searchParams?.status || "ALL";
   const query = searchParams?.query || "";
+  const page = Math.max(1, parseInt(searchParams?.page || "1", 10) || 1);
 
   let whereClause: any = {};
   if (statusFilter !== "ALL") {
@@ -21,13 +24,31 @@ export default async function OrdersPage(props: {
     ];
   }
 
-  const orders = await prisma.order.findMany({
-    where: whereClause,
-    include: {
-      product: { select: { name: true, coverImageUrl: true } }
-    },
-    orderBy: { createdAt: "desc" }
-  });
+  /* Paginated: the previous unbounded findMany loaded every order plus its
+     product on each render. Count + page keeps the query flat as data grows. */
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({
+      where: whereClause,
+      include: {
+        product: { select: { name: true, coverImageUrl: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.order.count({ where: whereClause }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const buildPageUrl = (p: number) => {
+    const params = new URLSearchParams();
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (query) params.set("query", query);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/mkpanelzoneadmin/orders${qs ? `?${qs}` : ""}`;
+  };
 
   const statuses = ["ALL", "PENDING", "APPROVED", "DELIVERED", "REJECTED", "CANCELLED"];
 
@@ -139,6 +160,36 @@ export default async function OrdersPage(props: {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-black/20">
+            <p className="text-xs font-mono text-brand-ink-3">
+              Page {page} of {totalPages} · {total} orders
+            </p>
+            <div className="flex items-center gap-2">
+              <Link
+                href={buildPageUrl(Math.max(1, page - 1))}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                  page <= 1
+                    ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                    : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+                }`}
+              >
+                <ChevronLeft size={14} /> Prev
+              </Link>
+              <Link
+                href={buildPageUrl(Math.min(totalPages, page + 1))}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[44px] rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                  page >= totalPages
+                    ? "text-brand-ink-3/40 pointer-events-none border border-white/5"
+                    : "text-white bg-white/5 hover:bg-white/10 border border-white/10"
+                }`}
+              >
+                Next <ChevronRight size={14} />
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
