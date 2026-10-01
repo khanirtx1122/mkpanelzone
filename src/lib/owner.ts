@@ -1,17 +1,10 @@
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
-
 /**
- * OWNER AUTHORIZATION — single source of truth for the admin panel.
+ * OWNER SESSION — protection removed by owner request.
  *
- * The owner has no visible login page (by design). Access is established by
- * opening the private bootstrap URL with a high-entropy token, which sets an
- * HttpOnly `owner_session` cookie. Every admin page and every admin server
- * action must go through `requireOwner()`.
- *
- * Previously the admin layout and actions returned a hardcoded OWNER object,
- * which meant anyone who knew the URL had full control. This restores a real
- * server-side check without changing the "no login screen" UX.
+ * The admin panel is now publicly accessible: anyone who opens
+ * /mkpanelzoneadmin gets the OWNER experience. There is no cookie check,
+ * no bootstrap token and no login screen. A single OWNER agent row is
+ * auto-provisioned so audit logs and "created by" fields keep working.
  */
 
 export type OwnerSession = {
@@ -20,39 +13,25 @@ export type OwnerSession = {
   role: string;
 };
 
-function parseSession(raw: string | undefined): { userId?: string } | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    /* not JSON — legacy plain-id cookie */
-  }
-  return null;
-}
-
-/**
- * Resolves the signed-in OWNER from the session cookie, verifying against the
- * database so a disabled or deleted owner loses access immediately.
- * Returns null when the caller is not a valid, active owner.
- */
+/** Resolves the implicit OWNER identity, creating it on first use. */
 export async function getOwnerSession(): Promise<OwnerSession | null> {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get("owner_session")?.value;
-  if (!raw) return null;
-
-  const parsed = parseSession(raw);
-  const id = parsed?.userId ?? raw;
-
   try {
-    const owner = await prisma.agent.findUnique({
-      where: { id },
-      select: { id: true, username: true, role: true, status: true },
+    const { prisma } = await import("@/lib/prisma");
+    const owner = await prisma.agent.upsert({
+      where: { username: "owner" },
+      update: { status: "ACTIVE", role: "OWNER" },
+      create: {
+        username: "owner",
+        // No login flow exists anymore; the hash is an unusable placeholder.
+        passwordHash: "!",
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+      select: { id: true, username: true, role: true },
     });
-    if (!owner || owner.role !== "OWNER" || owner.status !== "ACTIVE") return null;
     return { userId: owner.id, username: owner.username, role: owner.role };
   } catch (error) {
-    console.error("[getOwnerSession] lookup failed:", error);
+    console.error("[getOwnerSession] failed:", error);
     return null;
   }
 }
@@ -62,11 +41,7 @@ export async function isOwner(): Promise<boolean> {
   return (await getOwnerSession()) !== null;
 }
 
-/**
- * Guard for server actions. Returns the session or null — callers return an
- * "Unauthorized" result when null instead of throwing, so a stale cookie
- * produces a clean error rather than a crash.
- */
+/** Guard for server actions. Always resolves now — kept for call-site stability. */
 export async function requireOwner(): Promise<OwnerSession | null> {
   return getOwnerSession();
 }
