@@ -32,13 +32,13 @@ export function CompactProductCard({ product, index }: { product: Product; index
   return (
     <Link
       href={`/products/${product.slug}`}
-      className="group flex flex-col rounded-[18px] border bg-surface-glass transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-[3px] hover:shadow-[var(--shadow-card)] hover:border-[color:var(--border-subtle-hover)] active:scale-[0.98] overflow-hidden card-entrance tap-flat"
-      style={{
-        borderColor: "var(--border-subtle)",
-        animationDelay: `${index * 50}ms`
-      }}
+      className="rgb-border group flex flex-col rounded-[18px] transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-[3px] active:scale-[0.98] card-entrance tap-flat"
+      style={{ animationDelay: `${index * 50}ms` }}
       aria-label={`${product.name} — PKR ${product.price.toFixed(0)}`}
     >
+      {/* Inner opaque surface — sits above the rotating RGB ring so only the
+          card edge ever shows the animation (no colour bleeding into content). */}
+      <div className="relative z-[1] flex flex-col flex-1 rounded-[17px] overflow-hidden bg-surface-glass">
       {/* ── IMAGE / ICON AREA ── */}
       <div className="relative w-full aspect-[16/10] bg-surface-raised overflow-hidden">
         {coverImage ? (
@@ -98,6 +98,7 @@ export function CompactProductCard({ product, index }: { product: Product; index
             <ArrowRight size={12} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </div>
         </div>
+      </div>
       </div>
     </Link>
   );

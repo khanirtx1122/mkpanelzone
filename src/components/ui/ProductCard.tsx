@@ -117,12 +117,12 @@ export function ProductCard({
     >
       <Link
         href={`/products/${product.slug}`}
-        className="block h-full tap-flat press-98 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-[22px]"
+        className="rgb-border block h-full tap-flat press-98 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-[22px]"
         aria-label={`${product.name} — PKR ${product.price.toFixed(0)}`}
       >
         <div 
-          className="relative flex flex-col h-full rounded-[22px] overflow-hidden border transition-colors duration-200 group-hover/card:border-[color:var(--border-subtle-hover)]"
-          style={{ background: "var(--surface)", borderColor: "var(--border-subtle)" }}
+          className="relative z-[1] flex flex-col h-full rounded-[21px] overflow-hidden group-hover/card:border-[color:var(--border-subtle-hover)]"
+          style={{ background: "var(--surface)", borderColor: "transparent" }}
         >
           {/* Top-edge highlight */}
           <div className="absolute inset-x-0 top-0 h-px pointer-events-none" style={{ background: "var(--border-top-highlight)" }} />

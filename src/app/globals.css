@@ -725,6 +725,116 @@ html[data-perf="low"] .hero-cta::after { animation: none; opacity: 0; }
 html[data-perf="low"] .brand-loop::before { animation: none; opacity: 0; }
 
 /* ================================================================
+   RGB NEON BORDER — premium animated edge on product cards.
+
+   How it works: the card paints a static hairline border (never removed),
+   then two absolutely-positioned conic-gradient rings rotate behind the
+   card. A rotating conic gradient is NOT a transform on the card itself,
+   so it cannot shift layout; the ring is larger than the card and is
+   clipped by `overflow:hidden` on the frame, so only the 1–2px edge is
+   ever visible. Combined with `opacity`, the whole effect stays on the
+   compositor.
+
+   Cost control: the animation is paused unless the card is hovered (on
+   hover-capable pointers) or the card is marked `.rgb-border--live`.
+   Both reduced-motion and low-perf kill the ring entirely and leave the
+   static accent border, so the card never looks broken.
+   ================================================================ */
+.rgb-border { position: relative; isolation: isolate; }
+
+/* Static fallback edge — always visible, theme-aware, subtle. */
+.rgb-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    var(--border-subtle),
+    var(--border-top-highlight),
+    var(--border-subtle)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 300ms var(--ease-obsidian);
+}
+
+/* Animated RGB conic ring — sits above the card background, below content. */
+.rgb-border::after {
+  content: "";
+  position: absolute;
+  /* Oversized so the rotating conic always covers the card edge. */
+  top: 50%;
+  left: 50%;
+  width: 260%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    from 0deg,
+    #4DA3FF,
+    #7C4DFF,
+    #FF2D55,
+    #FF9F1C,
+    #33D17A,
+    #4DA3FF
+  );
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  animation: rgb-spin 6s linear infinite;
+  animation-play-state: paused;
+  transition: opacity 320ms var(--ease-obsidian);
+}
+
+/* Light theme: soften the ring so it reads as a premium tint, not a rave. */
+[data-theme="light"] .rgb-border::after {
+  opacity: 0;
+  filter: saturate(0.75) brightness(0.92);
+}
+
+@keyframes rgb-spin {
+  to { rotate: 360deg; }
+}
+
+/* Reveal the ring only where it is cheap and intentional. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .rgb-border:hover::after,
+  .rgb-border:focus-within::after {
+    opacity: 0.85;
+    animation-play-state: running;
+  }
+  [data-theme="light"] .rgb-border:hover::after,
+  [data-theme="light"] .rgb-border:focus-within::after {
+    opacity: 0.62;
+  }
+  .rgb-border:hover::before,
+  .rgb-border:focus-within::before {
+    opacity: 0.35;
+  }
+}
+
+/* Opt-in always-on variant (used very sparingly, e.g. a single hero card). */
+@media (prefers-reduced-motion: no-preference) {
+  .rgb-border--live::after {
+    opacity: 0.8;
+    animation-play-state: running;
+  }
+}
+
+/* Reduced motion + low perf: static accent border only, ring removed. */
+@media (prefers-reduced-motion: reduce) {
+  .rgb-border::after { display: none; }
+  .rgb-border::before { opacity: 1; }
+}
+html[data-perf="low"] .rgb-border::after { display: none; }
+html[data-perf="low"] .rgb-border::before { opacity: 1; }
+
+/* ================================================================
    SCROLL REVEAL — transform + opacity only, driven by IntersectionObserver
    (see components/ui/Reveal.tsx). Never a layout property.
    ================================================================ */

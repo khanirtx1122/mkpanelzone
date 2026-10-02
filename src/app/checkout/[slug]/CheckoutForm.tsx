@@ -3,21 +3,29 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ShieldCheck, AlertTriangle, CheckCircle2, MessageCircle } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle2, MessageCircle, CreditCard, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { submitOrder } from "@/app/actions";
+
+export interface PaymentMethodOption {
+  id: string;
+  name: string;
+}
 
 interface Props {
   productId: string;
   planPrice: number;
+  /** Active payment methods offered by the owner. */
+  paymentMethods?: PaymentMethodOption[];
 }
 
-export function CheckoutForm({ productId, planPrice }: Props) {
+export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Props) {
   const router = useRouter();
   
   const [email, setEmail] = useState("");
   const [discord, setDiscord] = useState("");
   const [amount, setAmount] = useState("");
+  const [methodId, setMethodId] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   
@@ -40,25 +48,32 @@ export function CheckoutForm({ productId, planPrice }: Props) {
         if (parsed.email) setEmail(parsed.email);
         if (parsed.discord) setDiscord(parsed.discord);
         if (parsed.amount) setAmount(parsed.amount);
+        if (parsed.methodId) setMethodId(parsed.methodId);
       } catch (e) {}
     }
   }, [productId]);
 
   useEffect(() => {
     // Save draft on change
-    const draft = { email, discord, amount };
+    const draft = { email, discord, amount, methodId };
     sessionStorage.setItem(`checkout_draft_${productId}`, JSON.stringify(draft));
-  }, [email, discord, amount, productId]);
+  }, [email, discord, amount, methodId, productId]);
 
   const parsedAmount = parseFloat(amount.replace(/,/g, ""));
   const isValidAmount = !isNaN(parsedAmount) && amount.trim() !== "";
   const isMatch = isValidAmount && parsedAmount === planPrice;
   const isMismatch = isValidAmount && parsedAmount !== planPrice;
+  const hasMethods = paymentMethods.length > 0;
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       newErrors.email = "Please enter a valid email address.";
+    }
+
+    // Only required when the owner has actually configured payment methods.
+    if (hasMethods && !methodId) {
+      newErrors.method = "Please select the payment method you used.";
     }
     
     if (!amount) {
@@ -101,6 +116,7 @@ export function CheckoutForm({ productId, planPrice }: Props) {
     formData.append("email", email);
     formData.append("discord", discord);
     formData.append("amountReported", amount);
+    if (methodId) formData.append("paymentMethod", methodId);
     formData.append("honeypot", honeypot);
     formData.append("idempotencyKey", idempotencyKey);
     formData.append("paymentProof", fileInputRef.current!.files![0]);
@@ -158,6 +174,69 @@ export function CheckoutForm({ productId, planPrice }: Props) {
         <label>Do not fill this out if you are human</label>
         <input type="text" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} tabIndex={-1} />
       </div>
+
+      {/* ── PAYMENT METHOD SELECTION ── */}
+      {hasMethods && (
+        <div>
+          <label className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">
+            Payment method you used
+          </label>
+          <div
+            role="radiogroup"
+            aria-label="Payment method"
+            aria-invalid={!!errors.method}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+          >
+            {paymentMethods.map((pm) => {
+              const selected = methodId === pm.id;
+              return (
+                <button
+                  key={pm.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    setMethodId(pm.id);
+                    if (errors.method) setErrors((p) => ({ ...p, method: "" }));
+                  }}
+                  className={`group relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 press-98 ${
+                    selected
+                      ? "border-brand-blue-500 bg-brand-blue-500/10 shadow-[0_0_0_1px_rgba(47,95,208,0.4),0_4px_16px_rgba(47,95,208,0.18)]"
+                      : "border-border-subtle bg-surface-glass hover:border-brand-blue-500/40"
+                  }`}
+                >
+                  <span
+                    className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
+                      selected
+                        ? "bg-brand-blue-500/20 border-brand-blue-500/40 text-brand-blue-400"
+                        : "bg-foreground/5 border-border-subtle text-brand-ink-3 group-hover:text-brand-ink-2"
+                    }`}
+                  >
+                    <CreditCard size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block text-[13px] font-bold tracking-tight truncate ${selected ? "text-foreground" : "text-brand-ink-2"}`}>
+                      {pm.name}
+                    </span>
+                  </span>
+                  <span
+                    className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center border transition-all ${
+                      selected
+                        ? "bg-brand-blue-500 border-brand-blue-500 text-white"
+                        : "border-border-subtle"
+                    }`}
+                  >
+                    {selected && <Check size={12} strokeWidth={3} />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {errors.method && (
+            <p className="text-red-400 text-xs mt-1.5 font-medium">{errors.method}</p>
+          )}
+        </div>
+      )}
 
       <div>
         <label htmlFor="email" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">Email Address (for receipt)</label>
@@ -291,3 +370,4 @@ export function CheckoutForm({ productId, planPrice }: Props) {
     </form>
   );
 }
+

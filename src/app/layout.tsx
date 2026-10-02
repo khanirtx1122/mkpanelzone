@@ -90,6 +90,20 @@ export default async function RootLayout({
   let activePopups: Awaited<ReturnType<typeof getGlobalChrome>>["popups"] = [];
   let memberPopups: Awaited<ReturnType<typeof getGlobalChrome>>["popups"] = [];
 
+  /* Footer WhatsApp link — resolved from the Admin-managed setting (with the
+     legacy env fallback). Cached per request, so it costs nothing extra here. */
+  let footerWhatsappHref: string | null = null;
+  try {
+    const { getWhatsAppNumber, getSettings, whatsappLink } = await import("@/lib/settings");
+    const [num, s] = await Promise.all([
+      getWhatsAppNumber(),
+      getSettings(["support_whatsapp_message"]),
+    ]);
+    footerWhatsappHref = whatsappLink(num, s.support_whatsapp_message?.trim() || undefined);
+  } catch (error) {
+    console.error("Failed to resolve WhatsApp support link:", error);
+  }
+
   try {
     const chrome = await getGlobalChrome();
     activeAnnouncement = pickForScope(chrome.announcements, "GUESTS");
@@ -258,7 +272,7 @@ export default async function RootLayout({
             <main className="flex-1">
               {children}
             </main>
-            <Footer />
+            <Footer whatsappHref={footerWhatsappHref} />
           </FreePanelProvider>
           <GlobalPopupProvider popups={activePopups} memberPopups={memberPopups} />
           {/* First-party, anonymous website analytics (owner-only dashboard). */}

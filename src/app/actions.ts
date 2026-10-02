@@ -38,6 +38,7 @@ const orderSchema = z.object({
   email: z.string().email(),
   discord: z.string().optional(),
   amountReported: z.string(),
+  paymentMethod: z.string().optional(),
   honeypot: z.string().optional(),
   idempotencyKey: z.string().uuid(),
 });
@@ -74,6 +75,7 @@ export async function submitOrder(formData: FormData) {
       email: data.email,
       discord: data.discord,
       amountReported: data.amountReported,
+      paymentMethod: data.paymentMethod,
       honeypot: data.honeypot,
       idempotencyKey: data.idempotencyKey,
     });
@@ -102,6 +104,18 @@ export async function submitOrder(formData: FormData) {
     if (isNaN(parsedAmount)) parsedAmount = 0;
 
     const amountMatches = parsedAmount === product.price;
+
+    /* Resolve the customer's chosen payment method to its display name.
+       Only a method that actually exists and is active is ever echoed back,
+       so a forged value can't inject text into the WhatsApp message. */
+    let paymentMethodName = "Not specified";
+    if (parsed.data.paymentMethod) {
+      const method = await prisma.paymentMethod.findUnique({
+        where: { id: parsed.data.paymentMethod },
+        select: { name: true, active: true },
+      });
+      if (method && method.active) paymentMethodName = method.name;
+    }
 
     const file = formData.get("paymentProof") as File;
     if (!file || file.size === 0) {
@@ -135,7 +149,10 @@ export async function submitOrder(formData: FormData) {
       }
     });
 
-    const ownerPhone = process.env.OWNER_WHATSAPP_NUMBER;
+    /* Resolve the destination number from the Admin-managed setting, falling
+       back to the legacy env var. Owner can change it any time without a deploy. */
+    const { getWhatsAppNumber, whatsappLink } = await import("@/lib/settings");
+    const ownerPhone = await getWhatsAppNumber();
     const storeTimezone = "Asia/Karachi";
     const dateStr = new Date().toLocaleString("en-GB", {
       timeZone: storeTimezone,
@@ -158,6 +175,7 @@ Date: ${dateStr}
 
 *Product:* ${product.name}
 *Plan price:* PKR ${product.price.toFixed(2)}
+*Payment method:* ${paymentMethodName}
 *Amount sent (typed by customer):* PKR ${parsedAmount.toFixed(2)}
 *Amount check:* ${amountMatches ? "MATCHES" : `MISMATCH - expected PKR ${product.price.toFixed(2)}`}
 
@@ -169,10 +187,7 @@ Date: ${dateStr}
 
 Please verify my payment and send my access details.`;
 
-    let whatsappUrl = null;
-    if (ownerPhone) {
-      whatsappUrl = `https://wa.me/${ownerPhone}?text=${encodeURIComponent(messageText)}`;
-    }
+    const whatsappUrl = whatsappLink(ownerPhone, messageText);
 
     const result = { success: true, orderRef: orderNumber, whatsappUrl, messageText };
     idempotencyCache.set(parsed.data.idempotencyKey, result);

@@ -111,23 +111,28 @@ export function AccessForm({
   const activePlatform = platformCode ? platforms.find((p) => p.code === platformCode) ?? null : null;
   const activeBranches = platformCode ? branchesByPlatform[platformCode] ?? [] : [];
 
-  /* ── Step 1: platform selection (fully dynamic) ───────────────────────── */
+  /* ── Step 1: platform selection (fully dynamic) ───────────────────────── *
+     Mobile shows 3 platforms per row as specified, then smooths out to a
+     comfortable 2-up / 3-up rhythm as the viewport grows. Cards are
+     deliberately compact on the smallest screens so three fit without
+     cramping (tight padding, smaller icon, clamped type). */
   if (!activePlatform) {
+    const count = platforms.length;
     const gridCols =
-      platforms.length >= 3
-        ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
-        : platforms.length === 2
-          ? "grid-cols-1 sm:grid-cols-2"
+      count >= 3
+        ? "grid-cols-2 min-[420px]:grid-cols-3"
+        : count === 2
+          ? "grid-cols-2 max-w-lg mx-auto"
           : "grid-cols-1 max-w-md mx-auto";
 
     return (
       <div className="max-w-4xl w-full">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4 uppercase tracking-tight">CUSTOMER ACCESS</h1>
-          <p className="text-brand-ink-3 text-[17px]">Select your platform to continue.</p>
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-foreground mb-3 sm:mb-4 uppercase tracking-tight">CUSTOMER ACCESS</h1>
+          <p className="text-brand-ink-3 text-[15px] sm:text-[17px]">Select your platform to continue.</p>
         </div>
 
-        <div className={`grid ${gridCols} gap-6`}>
+        <div className={`grid ${gridCols} gap-2.5 min-[420px]:gap-4 sm:gap-6`}>
           {platforms.map((p, i) => {
             const Icon = platformIcon(p.iconKey);
             const accent = ACCENTS[i % ACCENTS.length];
@@ -138,19 +143,21 @@ export function AccessForm({
                 className="text-left group outline-none"
               >
                 <GlassCard
-                  className={`h-full flex flex-col p-8 transition-all duration-300 hover:-translate-y-1 ${accent.border} ${accent.glow}`}
+                  className={`h-full flex flex-col p-3 min-[420px]:p-4 sm:p-8 transition-all duration-300 hover:-translate-y-1 ${accent.border} ${accent.glow}`}
                 >
                   <div
-                    className={`w-12 h-12 rounded-xl bg-surface-glass flex items-center justify-center ${accent.iconText} mb-6 ${accent.iconBg} group-hover:scale-110 transition-all duration-300`}
+                    className={`w-9 h-9 min-[420px]:w-10 min-[420px]:h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-surface-glass flex items-center justify-center ${accent.iconText} mb-3 sm:mb-6 ${accent.iconBg} group-hover:scale-110 transition-all duration-300`}
                   >
-                    <Icon size={24} />
+                    <Icon size={22} className="w-[18px] h-[18px] min-[420px]:w-[20px] min-[420px]:h-[20px] sm:w-6 sm:h-6" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-foreground mb-2 tracking-tight uppercase">{p.name}</h3>
-                  <p className="text-brand-ink-3 text-[14px] flex-grow mb-6">
+                  <h3 className="text-[13px] min-[420px]:text-[15px] sm:text-xl font-extrabold text-foreground mb-1 sm:mb-2 tracking-tight uppercase leading-tight">
+                    {p.name}
+                  </h3>
+                  <p className="hidden sm:block text-brand-ink-3 text-[14px] flex-grow mb-6">
                     {p.description || `Access your ${p.name} package resources.`}
                   </p>
-                  <div className={`font-bold text-sm tracking-widest ${accent.cta} flex items-center transition-colors`}>
-                    CONTINUE <span className="ml-2">→</span>
+                  <div className={`mt-auto pt-2 font-bold text-[10px] sm:text-sm tracking-widest ${accent.cta} flex items-center transition-colors`}>
+                    CONTINUE <span className="ml-1 sm:ml-2">→</span>
                   </div>
                 </GlassCard>
               </button>
