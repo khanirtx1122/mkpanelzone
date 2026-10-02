@@ -151,6 +151,12 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
   let branchId = ((formData.get("branchId") as string) || "") || null;
   let packageId = ((formData.get("packageId") as string) || "") || null;
   const status = (formData.get("status") as string) || "active";
+  /* Access gate chosen at creation time. Anything other than an explicit
+     UNPAID is treated as PAID, matching the column default. */
+  const paymentStatus =
+    ((formData.get("paymentStatus") as string) || "PAID").toUpperCase() === "UNPAID"
+      ? "UNPAID"
+      : "PAID";
 
   if (!identifier || !password || !platformType) {
     return { success: false, error: "Customer ID, password and platform are required." };
@@ -225,6 +231,7 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
         branchId,
         packageId,
         status,
+        paymentStatus,
         createdSource: "OWNER_ADMIN",
       },
     });
@@ -235,6 +242,37 @@ export async function adminCreateCustomer(prevState: any, formData: FormData) {
   } catch (error) {
     console.error("[adminCreateCustomer]", error);
     return { success: false, error: "Unable to create customer. Please try again." };
+  }
+}
+
+/**
+ * PAID ⇄ UNPAID switch.
+ *
+ * Writes ONLY paymentStatus. Customer ID, password hash, platform, branch,
+ * package, device bindings, expiry and createdAt are untouched, so an account
+ * can be suspended for non-payment and restored later without a new password
+ * or a device reset.
+ *
+ * Revalidating the customer list is not enough on its own: the next protected
+ * request re-reads the row server-side, which is what revokes access for an
+ * already-open session when the switch goes the other way (PAID → UNPAID).
+ */
+export async function adminSetCustomerPaymentStatus(id: string, status: string) {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const next = status === "UNPAID" ? "UNPAID" : "PAID";
+  try {
+    await prisma.customer.update({
+      where: { id },
+      data: { paymentStatus: next },
+    });
+    revalidatePath("/mkpanelzoneadmin/customers");
+    revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
+    return { success: true, paymentStatus: next };
+  } catch (error) {
+    console.error("[adminSetCustomerPaymentStatus]", error);
+    return { error: "Failed to update payment status." };
   }
 }
 

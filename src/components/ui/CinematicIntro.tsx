@@ -24,6 +24,14 @@ import s from "./intro/CinematicIntro.module.css";
  * by the shutter — never faded in.
  */
 
+/** Registered by the pre-hydration script in the root layout. */
+declare global {
+  interface Window {
+    __mkReveal?: () => void;
+    __mkIntroCap?: ReturnType<typeof setTimeout>;
+  }
+}
+
 const TIERS = ["full", "lite", "reduced"];
 /** represents "we do not know yet" during SSR + hydration */
 const PENDING = "pending";
@@ -59,8 +67,13 @@ export function CinematicIntro() {
 
   const mobile = useMemo(() => {
     if (!isTier) return false;
-    if (typeof window.matchMedia !== "function") return false;
-    return window.matchMedia("(max-width: 767px)").matches;
+    try {
+      if (typeof window.matchMedia !== "function") return false;
+      return window.matchMedia("(max-width: 767px)").matches;
+    } catch {
+      // Very old Safari without matchMedia support — treat as desktop layout.
+      return false;
+    }
   }, [isTier]);
 
   const cfg = useMemo(
@@ -79,29 +92,46 @@ export function CinematicIntro() {
     const release = () => {
       if (released) return;
       released = true;
+      // The pre-hydration helper does the DOM work (and cannot fail to exist).
       try {
-        sessionStorage.setItem("mk_intro_seen", "true");
+        if (typeof window.__mkReveal === "function") {
+          window.__mkReveal();
+        } else {
+          document.documentElement.setAttribute("data-intro", "off");
+          document.documentElement.removeAttribute("data-intro-run");
+        }
       } catch {
-        /* storage blocked — the intro simply replays next visit */
+        /* never let cleanup itself throw */
       }
-      // Flip the attribute first: it hides the overlay via CSS, and the store
-      // notification unmounts it so nothing stays clickable behind the site.
-      document.documentElement.setAttribute("data-intro", "off");
-      document.documentElement.removeAttribute("data-intro-run");
+      if (window.__mkIntroCap) window.clearTimeout(window.__mkIntroCap);
+      // The store notification unmounts the overlay so nothing stays
+      // clickable behind the site.
       notify();
     };
 
-    // Safety net — the overlay must never outlive the sequence.
+    // Layered safety nets — the overlay must never outlive the sequence:
+    //   1. this timer (runs once React is alive),
+    //   2. the plain-JS cap in the root layout (runs even if React never loads),
+    //   3. pagehide / visibilitychange,
+    //   4. pageshow — Safari bfcache restores do not resume frozen timers.
     const safety = window.setTimeout(release, (cfg.unmount + 0.5) * 1000);
     const onVisibility = () => {
       if (document.visibilityState === "hidden") release();
     };
+    /* bfcache restore only — `persisted` is true when Safari/Chrome restored a
+       frozen page. A normal load also fires pageshow, which must NOT cut the
+       sequence short. */
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) release();
+    };
 
     window.addEventListener("pagehide", release);
+    window.addEventListener("pageshow", onPageShow);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearTimeout(safety);
       window.removeEventListener("pagehide", release);
+      window.removeEventListener("pageshow", onPageShow);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [cfg]);

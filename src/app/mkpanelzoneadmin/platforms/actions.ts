@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { requireOwner } from "@/lib/owner";
 import {
   isValidPlatformCode,
@@ -15,6 +15,10 @@ export type PlatformActionResult = { success?: boolean; error?: string };
 
 /** Every path that renders a platform list and must be refreshed on change. */
 function revalidatePlatformSurfaces() {
+  /* Clear the cached platform list FIRST — every one of these pages reads it,
+     so without this a new platform could stay invisible for up to 5 minutes.
+     `updateTag` gives immediate read-your-own-writes semantics in an action. */
+  updateTag("platforms");
   revalidatePath("/mkpanelzoneadmin/platforms");
   revalidatePath("/mkpanelzoneadmin/resources");
   revalidatePath("/mkpanelzoneadmin/customers");

@@ -39,6 +39,7 @@ export function CreateCustomerForm({
   }, [state, router]);
 
   const [platform, setPlatform] = useState(platforms[0]?.code ?? "ANDROID");
+  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">("PAID");
   const platformBranches = branches.filter((b) => b.platformType === platform);
 
   return (
@@ -133,6 +134,46 @@ export function CreateCustomerForm({
           <option value="active">Active</option>
           <option value="disabled">Disabled</option>
         </select>
+      </div>
+
+      {/* Payment / access gate. The value is a server-validated field: anything
+          other than an explicit UNPAID is stored as PAID. */}
+      <div>
+        <label className="block text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-2">
+          Payment Status
+        </label>
+        <input type="hidden" name="paymentStatus" value={paymentStatus} />
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("PAID")}
+            aria-pressed={paymentStatus === "PAID"}
+            className={`admin-press rounded-xl px-4 py-3 min-h-[52px] text-sm font-bold uppercase tracking-wider border transition-colors ${
+              paymentStatus === "PAID"
+                ? "bg-green-500/15 text-green-400 border-green-500/40"
+                : "bg-black/40 text-brand-ink-3 border-white/10 hover:border-white/25"
+            }`}
+          >
+            Paid
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("UNPAID")}
+            aria-pressed={paymentStatus === "UNPAID"}
+            className={`admin-press rounded-xl px-4 py-3 min-h-[52px] text-sm font-bold uppercase tracking-wider border transition-colors ${
+              paymentStatus === "UNPAID"
+                ? "bg-amber-500/15 text-amber-400 border-amber-500/40"
+                : "bg-black/40 text-brand-ink-3 border-white/10 hover:border-white/25"
+            }`}
+          >
+            Unpaid
+          </button>
+        </div>
+        <p className="text-[11px] text-brand-ink-3 mt-2">
+          {paymentStatus === "PAID"
+            ? "Full access to the customer's platform, branch and package resources."
+            : "The customer can sign in, but protected resources stay blocked until payment is approved. Nothing else about the account changes."}
+        </p>
       </div>
 
       <div className="pt-4 flex justify-end">

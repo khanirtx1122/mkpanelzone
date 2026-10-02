@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Eye, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { resolveProofWithExistence, type ResolvedProof } from "@/lib/paymentProof";
 
 const PAGE_SIZE = 25;
 
@@ -40,6 +41,18 @@ export default async function OrdersPage(props: {
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  /* ── Proof availability ────────────────────────────────────────────────
+     Each row is priced as: thumbnail / view-link / no proof / missing file.
+     Existence is probed with a cheap HEAD request, in parallel, exactly for the
+     rows on this page — the browser never downloads a full-size screenshot
+     until the Owner opens one. */
+  const proofRefs = new Map<string, ResolvedProof | null>();
+  await Promise.all(
+    orders.map(async (order) => {
+      proofRefs.set(order.id, await resolveProofWithExistence(order.paymentProofPath));
+    })
+  );
 
   const buildPageUrl = (p: number) => {
     const params = new URLSearchParams();
@@ -98,6 +111,7 @@ export default async function OrdersPage(props: {
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Customer</th>
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Product</th>
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Amount</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Payment Proof</th>
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Status</th>
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3">Date</th>
                 <th className="px-6 py-4 text-xs font-bold tracking-widest uppercase text-brand-ink-3 text-right">Actions</th>
@@ -106,7 +120,7 @@ export default async function OrdersPage(props: {
             <tbody className="divide-y divide-white/5">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-brand-ink-3">
+                  <td colSpan={8} className="px-6 py-12 text-center text-brand-ink-3">
                     No orders found.
                   </td>
                 </tr>
@@ -133,6 +147,42 @@ export default async function OrdersPage(props: {
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-brand-blue-400">${order.priceSnapshot.toFixed(2)}</span>
                     </td>
+                    {/* Proof: lightweight lazy thumbnail, or an honest state. */}
+                    <td className="px-6 py-4">
+                      {!proofRefs.get(order.id) ? (
+                        <span className="text-[11px] font-mono text-brand-ink-3 whitespace-nowrap">
+                          No payment proof
+                        </span>
+                      ) : !proofRefs.get(order.id)!.exists ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-400 whitespace-nowrap">
+                          <ImageOff size={13} /> File missing
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/mkpanelzoneadmin/orders/${order.id}`}
+                          className="inline-flex items-center gap-2 group/proof"
+                          title="Open payment proof"
+                        >
+                          {proofRefs.get(order.id)!.inlineVisible ? (
+                            <img
+                              src={proofRefs.get(order.id)!.url}
+                              alt={`Payment proof ${order.orderNumber}`}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-10 h-10 rounded object-cover border border-white/10 group-hover/proof:border-brand-blue-500/50 transition-colors"
+                            />
+                          ) : (
+                            <span className="w-10 h-10 rounded border border-white/10 flex items-center justify-center text-[9px] font-bold text-brand-ink-3">
+                              FILE
+                            </span>
+                          )}
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-brand-blue-400 group-hover/proof:text-brand-blue-300 whitespace-nowrap">
+                            View Proof
+                          </span>
+                        </Link>
+                      )}
+                    </td>
+
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold tracking-wider uppercase border ${
                         order.status === 'approved' ? 'bg-green-500/10 text-green-400 border-green-500/20' :

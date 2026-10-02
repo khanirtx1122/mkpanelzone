@@ -69,8 +69,14 @@ export function CheckoutForm({ productId, planPrice }: Props) {
       newErrors.amount = "Maximum 2 decimal places allowed.";
     }
     
-    if (!fileInputRef.current?.files?.length) {
+    const chosen = fileInputRef.current?.files?.[0];
+    if (!chosen) {
       newErrors.paymentProof = "Payment proof screenshot is required.";
+    } else if (chosen.size > 8 * 1024 * 1024) {
+      // Caught here so the customer is told before anything is uploaded.
+      newErrors.paymentProof = `That screenshot is ${(chosen.size / 1024 / 1024).toFixed(1)} MB. Please use a file under 8 MB.`;
+    } else if (chosen.size === 0) {
+      newErrors.paymentProof = "That file appears to be empty. Please choose it again.";
     }
 
     setErrors(newErrors);
@@ -108,13 +114,25 @@ export function CheckoutForm({ productId, planPrice }: Props) {
         return;
       }
 
-      // Save success details to session storage for the success page
-      sessionStorage.setItem("pendingWhatsAppRedirect", res.whatsappUrl);
+      // Save success details for the success page. Storage can throw in older
+      // Safari private mode, which must never break a completed order.
+      try {
+        // whatsappUrl is null whenever the owner's WhatsApp number is not
+        // configured, and sessionStorage serialises that to the literal
+        // string "null" — which the success page then resolved as a relative
+        // URL and bounced the buyer to /order/null (404). Only ever persist
+        // a real absolute http(s) URL.
+        if (typeof res.whatsappUrl === "string" && /^https?:\/\//i.test(res.whatsappUrl)) {
+          sessionStorage.setItem("pendingWhatsAppRedirect", res.whatsappUrl);
+        } else {
+          sessionStorage.removeItem("pendingWhatsAppRedirect");
+        }
+        sessionStorage.removeItem(`checkout_draft_${productId}`);
+      } catch {
+        /* non-fatal: the order is already placed server-side */
+      }
 
       setStatus("success");
-      
-      // Clear draft
-      sessionStorage.removeItem(`checkout_draft_${productId}`);
 
       // Small delay to show the success icon before redirecting
       setTimeout(() => {
@@ -226,7 +244,7 @@ export function CheckoutForm({ productId, planPrice }: Props) {
           id="paymentProof"
           ref={fileInputRef}
           type="file" 
-          accept="image/png, image/jpeg, image/jpg"
+          accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/heic,image/heif,application/pdf"
           required
           aria-invalid={!!errors.paymentProof}
           aria-describedby={errors.paymentProof ? "file-error" : undefined}

@@ -11,6 +11,10 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
+/* The Owner panel is never prerendered or cached: it must always reflect the
+   current database state. */
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   /* Owner protection removed by owner request: the panel is publicly
      accessible. The owner identity is implicit (auto-provisioned). */

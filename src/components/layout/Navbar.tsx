@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useFreePanel } from "@/components/freepanel/FreePanelProvider";
+import { useSessionHint } from "./useSessionHint";
 
 const navLinks = [
   { href: "/",         label: "Home",    Icon: Home },
@@ -14,7 +15,12 @@ const navLinks = [
   { href: "/support",  label: "Support",  Icon: MessageCircle },
 ];
 
-export function Navbar({ isLoggedIn }: { isLoggedIn?: boolean }) {
+export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean }) {
+  /* The session hint is read in the browser so the root layout never has to
+     touch cookies() — that read made every public page render dynamically.
+     The prop is still honoured when a caller passes it explicitly. */
+  const sessionHint = useSessionHint();
+  const isLoggedIn = sessionHint || !!isLoggedInProp;
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);

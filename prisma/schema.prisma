@@ -16,8 +16,13 @@ model Customer {
   branchId          String?
   packageId         String?
   status            String           @default("active")
+  /// Access gate: PAID | UNPAID. Defaults to PAID so every pre-existing
+  /// customer keeps the exact access they had before this column existed.
+  paymentStatus     String           @default("PAID")
   createdSource     String           @default("MIGRATED")
   createdByAgentId  String?
+  /// Payment proof reference. Stores a STORAGE OBJECT PATH (payment-proofs/…)
+  /// — never a temporary URL. Resolved for display by lib/paymentProof.ts.
   agentPaymentProof String?
   lastLoginAt       DateTime?
   createdAt         DateTime         @default(now())
@@ -34,6 +39,8 @@ model Customer {
   @@index([createdAt(sort: Desc)])
   @@index([createdByAgentId])
   @@index([packageId])
+  // Paid/unpaid admin filtering and the customer list segment.
+  @@index([paymentStatus, createdAt(sort: Desc)])
 }
 
 /// The single source of truth for access platforms (ANDROID, IPHONE, PC, ...).
@@ -120,11 +127,17 @@ model PackageResource {
   packageId    String?
   platformType String   @default("ANDROID")
   branchId     String?
+  /// FILE | LINK | TEXT | IMAGE | VIDEO | TUTORIAL | SECRET | NOTE
   type         String
   name         String
   description  String?
   url          String?
+  /// Free text content — also carries FILE PASSWORD / license secrets.
   secret       String?
+  /// Long-form body for TEXT / TUTORIAL resources (never rendered as raw HTML).
+  bodyText     String?
+  /// Controlled presentation accent: DEFAULT | INFO | WARNING | SUCCESS | HIGHLIGHT
+  accentStyle  String   @default("DEFAULT")
   version      String?
   status       String   @default("active")
   sortOrder    Int      @default(0)

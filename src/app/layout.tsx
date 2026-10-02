@@ -9,6 +9,7 @@ import { GlobalPopupProvider } from "@/components/providers/GlobalPopupProvider"
 import { FreePanelProvider } from "@/components/freepanel/FreePanelProvider";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
 import Script from "next/script";
+import { unstable_cache } from "next/cache";
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-heading",
@@ -35,46 +36,66 @@ export const metadata: Metadata = {
   description: "Premium Digital Products & Resources",
 };
 
-import { cookies } from "next/headers";
+/**
+ * Global chrome (announcement bar + popups) in ONE cached read.
+ *
+ * Two things used to make every page slow here:
+ *   1. the layout is rendered on EVERY route, so these queries were paid on
+ *      every navigation (now cached + deduped),
+ *   2. the audience was resolved from `cookies()`, which opted the whole site
+ *      out of static rendering. The audience is now resolved in the browser
+ *      from a non-sensitive hint cookie, so public pages can be prerendered
+ *      and cached again.
+ */
+const getGlobalChrome = unstable_cache(
+  async () => {
+    const now = new Date();
+    const windowFilter = {
+      active: true,
+      AND: [
+        { OR: [{ startDate: null }, { startDate: { lte: now } }] },
+        { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+      ],
+    };
+    const [announcements, popups] = await Promise.all([
+      prisma.announcement.findMany({
+        where: windowFilter,
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.popup.findMany({
+        where: windowFilter,
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+    return { announcements, popups };
+  },
+  ["global-chrome"],
+  { revalidate: 30, tags: ["global-chrome"] }
+);
 
+/** Best audience match: an exact scope row wins, otherwise the ALL row. */
+function pickForScope<T extends { scope: string }>(rows: T[], scope: "GUESTS" | "MEMBERS"): T | null {
+  return rows.find((r) => r.scope === scope) ?? rows.find((r) => r.scope === "ALL") ?? null;
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const hasSession = cookieStore.has("mk_session");
-  const scope = hasSession ? "MEMBERS" : "GUESTS";
-
-  let activeAnnouncement = null;
-  let activePopups: any[] = [];
+  let activeAnnouncement: Awaited<ReturnType<typeof getGlobalChrome>>["announcements"][number] | null = null;
+  let memberAnnouncement: Awaited<ReturnType<typeof getGlobalChrome>>["announcements"][number] | null = null;
+  let activePopups: Awaited<ReturnType<typeof getGlobalChrome>>["popups"] = [];
+  let memberPopups: Awaited<ReturnType<typeof getGlobalChrome>>["popups"] = [];
 
   try {
-    const now = new Date();
-    activeAnnouncement = await prisma.announcement.findFirst({
-      where: {
-        active: true,
-        OR: [{ scope: "ALL" }, { scope }],
-        AND: [
-          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
-          { OR: [{ endDate: null }, { endDate: { gte: now } }] },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    activePopups = await prisma.popup.findMany({
-      where: {
-        active: true,
-        OR: [{ scope: "ALL" }, { scope }],
-        AND: [
-          { OR: [{ startDate: null }, { startDate: { lte: now } }] },
-          { OR: [{ endDate: null }, { endDate: { gte: now } }] },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const chrome = await getGlobalChrome();
+    activeAnnouncement = pickForScope(chrome.announcements, "GUESTS");
+    memberAnnouncement = pickForScope(chrome.announcements, "MEMBERS");
+    activePopups = chrome.popups.filter((p) => p.scope === "ALL" || p.scope === "GUESTS");
+    memberPopups = chrome.popups.filter((p) => p.scope === "MEMBERS");
   } catch (error) {
     console.error("Failed to fetch global announcements and popups:", error);
   }
@@ -105,6 +126,34 @@ export default async function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
+              /* ---------------------------------------------------------*
+               * INTRO HARD FAIL-SAFE
+               *
+               * Plain DOM JavaScript, registered before any framework code.
+               * It cannot depend on React hydrating, on an animation library,
+               * on requestAnimationFrame, or on transitionend/animationend —
+               * those are exactly the things that used to leave the overlay
+               * covering the site on older iPhones. Whatever happens, the
+               * overlay is removed and the page becomes usable.
+               * --------------------------------------------------------- */
+              window.__mkReveal = function () {
+                try {
+                  var el = document.documentElement;
+                  el.setAttribute("data-intro", "off");
+                  el.removeAttribute("data-intro-run");
+                  var node = document.getElementById("mk-intro");
+                  if (node && node.parentNode) node.parentNode.removeChild(node);
+                  if (document.body) {
+                    document.body.style.overflow = "";
+                    document.body.style.position = "";
+                    document.body.style.height = "";
+                  }
+                  try { sessionStorage.setItem("mk_intro_seen", "true"); } catch (e) {}
+                } catch (e) {}
+              };
+              /* Last resort: the sequence's own tail is ~4.3s. */
+              window.__mkIntroCap = setTimeout(window.__mkReveal, 7000);
+
               (function() {
                 try {
                   var hasSeen = sessionStorage.getItem("mk_intro_seen");
@@ -200,15 +249,18 @@ export default async function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <AnnouncementBar announcement={activeAnnouncement} />
+          <AnnouncementBar
+            announcement={activeAnnouncement}
+            memberAnnouncement={memberAnnouncement}
+          />
           <FreePanelProvider>
-            <Navbar isLoggedIn={hasSession} />
+            <Navbar />
             <main className="flex-1">
               {children}
             </main>
             <Footer />
           </FreePanelProvider>
-          <GlobalPopupProvider popups={activePopups} />
+          <GlobalPopupProvider popups={activePopups} memberPopups={memberPopups} />
           {/* First-party, anonymous website analytics (owner-only dashboard). */}
           <AnalyticsTracker />
         </ThemeProvider>

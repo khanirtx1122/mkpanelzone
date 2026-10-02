@@ -68,6 +68,26 @@ export function CustomerFilters({ platforms }: { platforms: { code: string; name
         <option value="active" className="bg-black text-white">Active</option>
         <option value="disabled" className="bg-black text-white">Disabled</option>
       </select>
+
+      {/* Payment gate filter — resolved server-side by the customers page. */}
+      <select
+        defaultValue={searchParams.get("payment")?.toString() || "ALL"}
+        onChange={(e) => handleFilter("payment", e.target.value)}
+        className="bg-white/5 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors"
+      >
+        <option value="ALL" className="bg-black text-white">All Payments</option>
+        <option value="PAID" className="bg-black text-white">Paid only</option>
+        <option value="UNPAID" className="bg-black text-white">Unpaid only</option>
+      </select>
+
+      {isPending && (
+        <span
+          aria-live="polite"
+          className="self-center text-[11px] font-bold uppercase tracking-widest text-brand-ink-3"
+        >
+          Updating…
+        </span>
+      )}
     </div>
   );
 }

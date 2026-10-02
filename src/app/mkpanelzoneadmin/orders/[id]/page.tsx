@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, XCircle, Package, ExternalLink, Clock } from "lucide-react";
-import { updateOrderStatus } from "../../actions"; // We will add this
+import { ArrowLeft, CheckCircle, XCircle, Package, ExternalLink } from "lucide-react";
+import { updateOrderStatus } from "../../actions";
+import { AdminSubmitButton } from "@/components/admin/AdminButton";
+import { resolveProofWithExistence } from "@/lib/paymentProof";
 
 export default async function OrderDetailsPage(props: {
   params: Promise<{ id: string }>;
@@ -18,6 +20,10 @@ export default async function OrderDetailsPage(props: {
   if (!order) {
     notFound();
   }
+
+  /* Resolve the stored proof reference and verify the object still exists, so
+     a genuinely missing file reads as "missing" instead of a broken image. */
+  const proof = await resolveProofWithExistence(order.paymentProofPath);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -96,53 +102,122 @@ export default async function OrderDetailsPage(props: {
               <div className="pt-4 border-t border-white/5">
                 <p className="text-[10px] uppercase tracking-widest text-brand-ink-3 font-bold mb-3">Order Actions</p>
                 <div className="flex flex-wrap gap-2">
+                  {/* Real pending → success lifecycle; success only shows after
+                      the server action resolves. */}
                   <form action={updateOrderStatus as any}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="status" value="approved" />
-                    <button type="submit" disabled={order.status === 'approved'} className="flex items-center gap-2 px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">
-                      <CheckCircle size={14} /> Approve
-                    </button>
+                    <AdminSubmitButton
+                      variant="secondary"
+                      label="Approve"
+                      pendingLabel="Approving…"
+                      successLabel="Approved ✓"
+                    >
+                      <CheckCircle size={14} />
+                    </AdminSubmitButton>
                   </form>
                   <form action={updateOrderStatus as any}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="status" value="delivered" />
-                    <button type="submit" disabled={order.status === 'delivered'} className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">
-                      <Package size={14} /> Mark Delivered
-                    </button>
+                    <AdminSubmitButton
+                      variant="secondary"
+                      label="Mark Delivered"
+                      pendingLabel="Updating…"
+                      successLabel="Delivered ✓"
+                    >
+                      <Package size={14} />
+                    </AdminSubmitButton>
                   </form>
                   <form action={updateOrderStatus as any}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="status" value="rejected" />
-                    <button type="submit" disabled={order.status === 'rejected'} className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">
-                      <XCircle size={14} /> Reject
-                    </button>
+                    <AdminSubmitButton
+                      variant="secondary"
+                      label="Reject"
+                      pendingLabel="Rejecting…"
+                      successLabel="Rejected ✓"
+                    >
+                      <XCircle size={14} />
+                    </AdminSubmitButton>
                   </form>
                   <form action={updateOrderStatus as any}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="status" value="cancelled" />
-                    <button type="submit" disabled={order.status === 'cancelled'} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50">
-                      <XCircle size={14} /> Cancel
-                    </button>
+                    <AdminSubmitButton
+                      variant="danger"
+                      label="Cancel"
+                      pendingLabel="Cancelling…"
+                      successLabel="Cancelled ✓"
+                    >
+                      <XCircle size={14} />
+                    </AdminSubmitButton>
                   </form>
                 </div>
               </div>
             </div>
             
             <div className="flex-1">
-              <p className="text-[10px] uppercase tracking-widest text-brand-ink-3 font-bold mb-2">Payment Proof Screenshot</p>
-              {order.paymentProofPath ? (
+              <p className="text-[10px] uppercase tracking-widest text-brand-ink-3 font-bold mb-2">
+                Payment Proof Screenshot
+              </p>
+
+              {!proof ? (
+                <div className="flex items-center justify-center h-40 bg-black/40 border border-white/5 rounded-xl border-dashed px-4 text-center">
+                  <p className="text-sm text-brand-ink-3 font-medium">
+                    No payment proof submitted
+                  </p>
+                </div>
+              ) : !proof.exists ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center h-32 bg-red-500/10 border border-red-500/20 rounded-xl px-4 text-center">
+                    <p className="text-sm text-red-400 font-bold">
+                      Proof file is missing from storage
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-brand-ink-3 font-mono break-all">
+                    Recorded reference: {proof.raw}
+                  </p>
+                </div>
+              ) : (
                 <div className="relative group rounded-xl overflow-hidden border border-white/10 bg-black aspect-[3/4] max-w-sm">
-                  <img src={order.paymentProofPath} alt="Payment Proof" className="w-full h-full object-contain" />
-                  <a href={order.paymentProofPath} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {proof.inlineVisible ? (
+                    <img
+                      src={proof.url}
+                      alt={`Payment proof for ${order.orderNumber}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center px-4 text-center">
+                      <p className="text-xs text-brand-ink-3">
+                        This proof is not an inline-image format. Use the link below to open the
+                        original file.
+                      </p>
+                    </div>
+                  )}
+                  <a
+                    href={proof.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex items-center justify-center"
+                  >
                     <span className="flex items-center gap-2 text-white font-bold tracking-wider uppercase text-xs bg-white/10 px-4 py-2 rounded-lg border border-white/20">
                       Open Full Size <ExternalLink size={14} />
                     </span>
                   </a>
                 </div>
-              ) : (
-                <div className="flex items-center justify-center h-48 bg-black/40 border border-white/5 rounded-xl border-dashed">
-                  <p className="text-sm text-brand-ink-3 font-medium">No proof uploaded</p>
-                </div>
+              )}
+
+              {proof?.exists && (
+                <a
+                  href={proof.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-lg bg-brand-blue-500/10 border border-brand-blue-500/20 text-xs font-bold uppercase tracking-wider text-brand-blue-400 hover:bg-brand-blue-500/20 transition-colors"
+                >
+                  View Proof <ExternalLink size={14} />
+                </a>
               )}
             </div>
           </div>

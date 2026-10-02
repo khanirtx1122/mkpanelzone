@@ -18,15 +18,28 @@ export default async function AdminCustomersPage(props: {
   const q = (searchParams?.q as string) || "";
   const platformFilter = (searchParams?.platform as string) || "ALL";
   const statusFilter = (searchParams?.status as string) || "ALL";
+  const paymentFilter = ((searchParams?.payment as string) || "ALL").toUpperCase();
   const agentFilter = (searchParams?.agentId as string) || "";
   const page = Math.max(1, parseInt((searchParams?.page as string) || "1", 10) || 1);
 
+  /* Everything is filtered in the database and paginated — the browser never
+     receives the full customer table. */
   const where = {
-    ...(q ? { identifier: { contains: q } } : {}),
+    ...(q ? { identifier: { contains: q, mode: "insensitive" as const } } : {}),
     ...(platformFilter !== "ALL" ? { platformType: platformFilter } : {}),
     ...(statusFilter !== "ALL" ? { status: statusFilter } : {}),
+    ...(paymentFilter === "PAID" || paymentFilter === "UNPAID"
+      ? { paymentStatus: paymentFilter }
+      : {}),
     ...(agentFilter ? { createdByAgentId: agentFilter } : {}),
   };
+
+  const paymentCounts = await prisma.customer.groupBy({
+    by: ["paymentStatus"],
+    _count: { paymentStatus: true },
+  });
+  const countFor = (status: string) =>
+    paymentCounts.find((row) => (row.paymentStatus || "PAID") === status)?._count.paymentStatus ?? 0;
 
   /* Platforms, page of customers and total count in parallel. The previous
      version loaded EVERY matching customer plus relations on each render —
@@ -43,6 +56,7 @@ export default async function AdminCustomersPage(props: {
         identifier: true,
         platformType: true,
         status: true,
+        paymentStatus: true,
         createdAt: true,
         createdSource: true,
         agentPaymentProof: true,
@@ -60,6 +74,7 @@ export default async function AdminCustomersPage(props: {
     if (q) params.set("q", q);
     if (platformFilter !== "ALL") params.set("platform", platformFilter);
     if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (paymentFilter === "PAID" || paymentFilter === "UNPAID") params.set("payment", paymentFilter);
     if (agentFilter) params.set("agentId", agentFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
@@ -78,6 +93,14 @@ export default async function AdminCustomersPage(props: {
             View and manage all registered customers.
             <span className="text-brand-ink-3/70"> ({total} total)</span>
           </p>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="px-2.5 py-1 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 text-[11px] font-bold uppercase tracking-widest">
+              {countFor("PAID")} paid
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-bold uppercase tracking-widest">
+              {countFor("UNPAID")} unpaid
+            </span>
+          </div>
         </div>
         <Link
           href="/mkpanelzoneadmin/customers/new"
@@ -118,6 +141,17 @@ export default async function AdminCustomersPage(props: {
                       ) : (
                         <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-bold uppercase tracking-wider">Disabled</span>
                       )}
+
+                      {/* PAID / UNPAID access badge */}
+                      {(customer.paymentStatus || "PAID").toUpperCase() === "UNPAID" ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/25 text-[10px] font-bold uppercase tracking-wider">
+                          Unpaid
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/25 text-[10px] font-bold uppercase tracking-wider">
+                          Paid
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-brand-ink-3 font-mono flex items-center gap-2">
                       <span>Package: {customer.package?.name || "None"}</span>
@@ -129,7 +163,9 @@ export default async function AdminCustomersPage(props: {
 
                 <div className="text-right flex items-center gap-4 justify-end">
                   {customer.agentPaymentProof && (
-                    <span className="text-[10px] uppercase font-bold px-2 py-1 bg-brand-blue-500/10 text-brand-blue-500 border border-brand-blue-500/20 rounded">Proof Attached</span>
+                    <span className="text-[10px] uppercase font-bold px-2 py-1 bg-brand-blue-500/10 text-brand-blue-500 border border-brand-blue-500/20 rounded">
+                      Proof Attached
+                    </span>
                   )}
                   <div className="text-right">
                     <p className="text-[10px] uppercase font-bold text-brand-ink-3 tracking-widest mb-0.5">Joined</p>

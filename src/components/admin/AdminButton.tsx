@@ -32,6 +32,8 @@ type BaseProps = {
   /** Hide the idle label text and show only the icon while idle (icon buttons). */
   iconOnly?: boolean;
   title?: string;
+  /** Associates the button with a form by id (for buttons rendered outside it). */
+  form?: string;
 };
 
 const AUTO_PENDING: Record<string, string> = {
@@ -72,6 +74,7 @@ export function AdminSubmitButton({
   className = "",
   iconOnly = false,
   title,
+  form,
   children,
 }: BaseProps) {
   const { pending } = useFormStatus();
@@ -94,6 +97,7 @@ export function AdminSubmitButton({
   return (
     <button
       type="submit"
+      form={form}
       disabled={pending}
       aria-busy={pending}
       title={title}

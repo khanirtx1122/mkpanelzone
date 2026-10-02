@@ -7,6 +7,11 @@ import Link from "next/link";
 import { Shield, Zap, Sparkles, ArrowRight, Users, Lock, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
+/* Incrementally revalidated instead of rendered from scratch on every visit:
+   the homepage is served from cache and refreshed in the background, so product
+   or pricing edits appear on their own within a minute. */
+export const revalidate = 60;
+
 export default async function Home() {
   // Fetch up to 9 products for the main grid
   const mainProducts = await prisma.product.findMany({

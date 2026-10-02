@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { adminUpdateCustomerStatus, adminResetCustomerDevice, adminSetCustomerPassword, adminChangeCustomerPlatform } from "@/app/mkpanelzoneadmin/actions";
-import { ShieldAlert, ShieldCheck, Trash2, KeyRound, Loader2 } from "lucide-react";
+import {
+  adminUpdateCustomerStatus,
+  adminResetCustomerDevice,
+  adminSetCustomerPassword,
+  adminChangeCustomerPlatform,
+  adminSetCustomerPaymentStatus,
+} from "@/app/mkpanelzoneadmin/actions";
+import { ShieldAlert, ShieldCheck, Trash2, KeyRound, Loader2, CreditCard, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -21,6 +27,7 @@ export function CustomerActions({
   deviceCount,
   currentPlatform,
   currentPackageId,
+  currentPaymentStatus,
   packages,
   platforms
 }: { 
@@ -29,6 +36,7 @@ export function CustomerActions({
   deviceCount: number;
   currentPlatform: string;
   currentPackageId: string;
+  currentPaymentStatus: string;
   packages: any[];
   platforms: { code: string; name: string }[];
 }) {
@@ -38,6 +46,42 @@ export function CustomerActions({
   const router = useRouter();
   const toast = useAdminToast();
   const { phase, run } = useActionLifecycle();
+
+  /* ── PAID / UNPAID ────────────────────────────────────────────────────────
+     Local state: on server confirmation we update ONLY this row's badge. No
+     dashboard refetch, no re-fetch of customers/platforms/resources. */
+  const [paymentStatus, setPaymentStatus] = useState(currentPaymentStatus);
+  const [paymentPhase, setPaymentPhase] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const paymentBusy = paymentPhase === "saving";
+
+  const togglePaymentStatus = async () => {
+    if (paymentBusy) return; // duplicate-submission guard
+    const next = paymentStatus === "UNPAID" ? "PAID" : "UNPAID";
+    setPaymentPhase("saving");
+    try {
+      const result = await adminSetCustomerPaymentStatus(customerId, next);
+      if ((result as any)?.error) {
+        setPaymentPhase("error");
+        toast.error("Could not update payment status", (result as any).error);
+        setTimeout(() => setPaymentPhase("idle"), 1600);
+        return;
+      }
+      // Success is only shown AFTER the server confirmed the write.
+      setPaymentStatus(next);
+      setPaymentPhase("saved");
+      toast.success(
+        next === "PAID" ? "Marked as PAID" : "Marked as UNPAID",
+        next === "PAID"
+          ? "Protected resources unlock on their next request."
+          : "Protected resources are blocked immediately — including open sessions."
+      );
+      setTimeout(() => setPaymentPhase("idle"), 1400);
+    } catch {
+      setPaymentPhase("error");
+      toast.error("Could not update payment status", "Please try again.");
+      setTimeout(() => setPaymentPhase("idle"), 1600);
+    }
+  };
 
   const handleToggleStatus = () =>
     setConfirmState({
@@ -146,6 +190,56 @@ export function CustomerActions({
         <h2 className="text-sm font-bold text-brand-ink-3 uppercase tracking-widest border-b border-white/5 pb-3">Management Actions</h2>
 
         <div className="space-y-4">
+          {/* Payment / access gate — the highest-impact control on this page. */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-black/20 rounded-xl border border-white/5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <CreditCard size={16} className={paymentStatus === "UNPAID" ? "text-amber-400" : "text-green-400"} />
+                <p className="font-bold text-white">Payment Status</p>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border ${
+                    paymentStatus === "UNPAID"
+                      ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
+                      : "bg-green-500/10 text-green-400 border-green-500/25"
+                  }`}
+                >
+                  {paymentStatus}
+                </span>
+              </div>
+              <p className="text-xs text-brand-ink-3">
+                Controls protected resource access only. ID, password, platform, branch, package and
+                device binding are never touched.
+              </p>
+            </div>
+            <button
+              onClick={togglePaymentStatus}
+              disabled={paymentBusy}
+              aria-busy={paymentBusy}
+              className={`admin-press flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg font-bold text-sm border transition-colors disabled:cursor-not-allowed ${
+                paymentPhase === "saved"
+                  ? "bg-green-500/15 text-green-400 border-green-500/30"
+                  : paymentStatus === "UNPAID"
+                    ? "bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20"
+                    : "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
+              }`}
+            >
+              {paymentBusy ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : paymentPhase === "saved" ? (
+                <Check size={16} />
+              ) : (
+                <CreditCard size={16} />
+              )}
+              {paymentBusy
+                ? "SAVING…"
+                : paymentPhase === "saved"
+                  ? "SAVED ✓"
+                  : paymentStatus === "UNPAID"
+                    ? "Mark as Paid"
+                    : "Mark as Unpaid"}
+            </button>
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-black/20 rounded-xl border border-white/5">
             <div>
               <p className="font-bold text-white mb-1">Account Status</p>

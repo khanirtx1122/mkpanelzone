@@ -7,9 +7,31 @@ import { z } from "zod";
 
 import { headers } from "next/headers";
 import { ensureCustomerBranch, resolveBranch } from "@/lib/branches";
+import { uploadPaymentProof } from "@/lib/paymentProof";
 
 const rateLimits = new Map<string, { count: number; expiresAt: number }>();
+const loginAttempts = new Map<string, { count: number; expiresAt: number }>();
+/** Order submissions are idempotent per generated client key. */
 const idempotencyCache = new Map<string, any>();
+
+/**
+ * Lightweight per-IP throttle for credential guessing. Deliberately generous:
+ * it must never lock a real customer out on a shared mobile network.
+ */
+function loginThrottled(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || entry.expiresAt <= now) {
+    loginAttempts.set(ip, { count: 1, expiresAt: now + 10 * 60 * 1000 });
+    return false;
+  }
+  entry.count++;
+  return entry.count > 20;
+}
+
+function clearLoginAttempts(ip: string) {
+  loginAttempts.delete(ip);
+}
 
 const orderSchema = z.object({
   productId: z.string(),
@@ -86,7 +108,17 @@ export async function submitOrder(formData: FormData) {
       return { success: false, error: "Payment proof is required." };
     }
 
-    const mockPath = `/uploads/${randomBytes(16).toString("hex")}-${file.name}`;
+    /* ── REAL upload ─────────────────────────────────────────────────────
+       The previous implementation invented a "/uploads/<random>-<name>"
+       path, saved it and reported success — so Admin always saw a broken
+       image. We now upload to Supabase Storage first and only persist the
+       returned object path. If the upload fails we return a real error and
+       create NO order, so success is never faked. */
+    const upload = await uploadPaymentProof(file, "order");
+    if (!upload.ok) {
+      return { success: false, error: upload.error };
+    }
+
     const orderNumber = generateOrderRef();
 
     await prisma.order.create({
@@ -96,7 +128,7 @@ export async function submitOrder(formData: FormData) {
         priceSnapshot: product.price,
         customerEmail: parsed.data.email,
         customerDiscord: parsed.data.discord || "",
-        paymentProofPath: mockPath,
+        paymentProofPath: upload.path,
         amountReported: parsedAmount,
         amountMatches,
         status: "pending"
@@ -147,7 +179,8 @@ Please verify my payment and send my access details.`;
 
     return result;
   } catch (error: any) {
-    return { success: false, error: error.message || "An unexpected error occurred." };
+    console.error("[submitOrder] failed:", error);
+    return { success: false, error: "We could not submit your order. Please try again." };
   }
 }
 
@@ -175,16 +208,38 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
     const parsed = loginSchema.safeParse(data);
     if (!parsed.success) return { type: "INVALID_CREDENTIALS" };
 
-    const customer = await prisma.customer.findUnique({
-      where: { identifier: parsed.data.identifier },
-      include: { devices: true }
-    });
+    const { headers: headerReader } = await import("next/headers");
+    const reqHeaders = await headerReader();
+    const ip = (reqHeaders.get("x-forwarded-for") || "local").split(",")[0].trim();
+    if (loginThrottled(ip)) {
+      return { type: "ERROR", message: "Too many attempts. Please wait a few minutes and try again." };
+    }
 
+    /* The identifier is trimmed before lookup: a trailing space from a mobile
+       keyboard's autocomplete was a common cause of "my password stopped
+       working". Exactly one query — no duplicate round-trip. */
+    const customer = await prisma.customer.findUnique({
+      where: { identifier: parsed.data.identifier.trim() },
+      include: { devices: true },
+    });
     if (!customer) return { type: "INVALID_CREDENTIALS" };
 
     const argon2 = await import("argon2");
-    const isValid = await argon2.verify(customer.passwordHash, parsed.data.password);
-    if (!isValid) return { type: "INVALID_CREDENTIALS" };
+    let isValid = false;
+    try {
+      isValid = await argon2.verify(customer.passwordHash, parsed.data.password);
+    } catch {
+      // A malformed/legacy hash must read as invalid credentials, never crash.
+      isValid = false;
+    }
+    /* ── Payment status is NOT revealed here and does not affect the answer.
+       An unpaid customer authenticates exactly like a paid one, then hits the
+       server-side gate on the dashboard. A wrong password can therefore never
+       leak whether an account is paid or unpaid. */
+    if (!isValid) {
+      return { type: "INVALID_CREDENTIALS" };
+    }
+    clearLoginAttempts(ip);
 
     if (customer.platformType !== parsed.data.platform) {
       return { type: "WRONG_PLATFORM" };
@@ -228,34 +283,64 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
     const userAgent = headersList.get("user-agent") || "unknown";
     const cookieStore = await cookies();
 
-    if (customer.devices.length === 0) {
+    /* ── Device token ────────────────────────────────────────────────────
+       Previously this cookie was only issued on the customer's FIRST-ever
+       login. Any later sign-in (new browser, cleared cookies, second device
+       after a reset) left the browser without it, and /access refuses to
+       redirect without BOTH cookies — which is what looked like a "stuck"
+       login. The token is now issued whenever the browser has none. */
+    if (!cookieStore.get("device_token")?.value) {
       const newToken = randomBytes(32).toString("hex");
-      const tokenHash = await argon2.hash(newToken);
-      
-      await prisma.customerDevice.create({
-        data: {
-          customerId: customer.id,
-          deviceTokenHash: tokenHash,
-          fingerprint: userAgent,
-        }
-      });
+      try {
+        const tokenHash = await argon2.hash(newToken);
+        await prisma.customerDevice.create({
+          data: {
+            customerId: customer.id,
+            deviceTokenHash: tokenHash,
+            fingerprint: userAgent,
+          },
+        });
+      } catch (deviceError) {
+        // Device bookkeeping must never block a valid sign-in.
+        console.error("[customerLogin] device registration failed:", deviceError);
+      }
 
       cookieStore.set("device_token", newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "lax",
         path: "/",
-        maxAge: 60 * 60 * 24 * 365 * 10
+        maxAge: 60 * 60 * 24 * 365 * 10,
       });
     }
 
+    /* `lax` (not `strict`) so Safari still sends the session after a redirect
+       back into the site from WhatsApp/Telegram; this is what made sign-in
+       feel unreliable on older iPhones. */
     cookieStore.set("auth_session", customer.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 30
+      maxAge: 60 * 60 * 24 * 30,
     });
+
+    /* Non-sensitive companion hint (contains no identity). It lets the navbar
+       and the announcement/popup layers know the audience in the browser, which
+       keeps the public site statically renderable. */
+    cookieStore.set("mk_session", "1", {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+
+    /* Login bookkeeping — best effort, never fatal, and never blocks the
+       response on a slow network. */
+    prisma.customer
+      .update({ where: { id: customer.id }, data: { lastLoginAt: new Date() } })
+      .catch(() => {});
 
     return { type: "SUCCESS" };
   } catch (error: any) {
@@ -268,6 +353,7 @@ export async function customerLogout() {
   const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
   cookieStore.delete("auth_session");
+  cookieStore.delete("mk_session");
   redirect("/");
 }
 
@@ -447,12 +533,34 @@ export async function toggleCustomerStatus(id: string, currentStatus: string) {
   const owner = await ensureOwner();
   if (!owner) return { error: "Unauthorized" };
 
+  // NOTE: this previously wrote to prisma.agent — a customer action must only
+  // ever touch the customer row. Kept as a thin wrapper so old call sites work.
+  return performCustomerStatusToggle(id, currentStatus);
+}
+
+/**
+ * PAID / UNPAID access switch. Touches ONLY paymentStatus: identifier,
+ * password, platform, branch, package, device bindings, expiry, metadata and
+ * createdAt are all left exactly as they were.
+ */
+export async function adminSetCustomerPaymentStatus(id: string, status: string) {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const next = status === "UNPAID" ? "UNPAID" : "PAID";
   try {
-    await prisma.agent.update({
+    await prisma.customer.update({
       where: { id },
-      data: { status: currentStatus === "active" ? "disabled" : "active" }
+      data: { paymentStatus: next },
     });
-  } catch (error) {}
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/mkpanelzoneadmin/customers");
+    revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
+    return { success: true, paymentStatus: next };
+  } catch (error) {
+    console.error("[adminSetCustomerPaymentStatus]", error);
+    return { error: "Failed to update payment status." };
+  }
 }
 
 export async function performCustomerStatusToggle(id: string, currentStatus: string) {
@@ -568,12 +676,15 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
   const agent = await prisma.agent.findUnique({ where: { id: sessionId } });
   if (!agent) return { success: false, error: "Forbidden" };
 
-  const identifier = formData.get("identifier") as string;
+  const identifier = ((formData.get("identifier") as string) || "").trim();
   const password = formData.get("password") as string;
-  const platformType = formData.get("platformType") as string;
-  
+  const platformType = ((formData.get("platformType") as string) || "").toUpperCase();
+
   if (!identifier || !password || !platformType) {
     return { success: false, error: "Identifier, password, and platform type are required." };
+  }
+  if (password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters." };
   }
 
   /* The platform comes from a client-controlled <select>, so it is verified
@@ -607,62 +718,39 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
     return { success: false, error: "Customer identifier already exists." };
   }
 
-  let finalPaymentProofUrl = "";
-
-  try {
-    const { supabase } = await import("@/lib/supabaseClient");
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const originalExt = file.name.split('.').pop() || 'tmp';
-    const filename = `agent-${uniqueSuffix}.${originalExt}`;
-
-    const { error } = await supabase.storage
-      .from('media')
-      .upload(`uploads/${filename}`, buffer, {
-        contentType: file.type || 'application/octet-stream',
-        upsert: false
-      });
-
-    if (error) {
-      console.error("Supabase Storage Error (Agent):", error);
-      return { success: false, error: "Failed to upload payment proof image." };
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('media')
-      .getPublicUrl(`uploads/${filename}`);
-
-    finalPaymentProofUrl = publicUrlData.publicUrl;
-  } catch (e: any) {
-    console.error("Upload exception:", e);
-    return { success: false, error: "Failed to upload payment proof image." };
+  /* Real upload via the shared proof pipeline. It returns a STORAGE OBJECT
+     PATH — the old code persisted an absolute public URL, which is why the
+     proof later failed to open for the Owner. */
+  const upload = await uploadPaymentProof(file, `agent-${agent.username}`);
+  if (!upload.ok) {
+    return { success: false, error: upload.error };
   }
-  
+
+  const paymentStatus = ((formData.get("paymentStatus") as string) || "PAID") === "UNPAID" ? "UNPAID" : "PAID";
+
   const argon2 = await import("argon2");
   const passwordHash = await argon2.hash(password);
 
-  await prisma.customer.create({
+  const created = await prisma.customer.create({
     data: {
       identifier,
       passwordHash,
       platformType,
       packageId,
+      paymentStatus,
       createdSource: "AGENT",
       createdByAgentId: agent.id,
-      agentPaymentProof: finalPaymentProofUrl
-    }
+      agentPaymentProof: upload.path,
+    },
   });
 
   /* Attach agent-created customers to their platform's default branch (if
      one exists) so they land in the right section from their first login. */
-  const created = await prisma.customer.findUnique({ where: { identifier } });
-  if (created) await ensureCustomerBranch(created);
+  await ensureCustomerBranch(created);
 
   const { revalidatePath } = await import("next/cache");
   revalidatePath("/mkpanelzoneadmin/customers");
-  revalidatePath("/agent/customers");
+  revalidatePath("/agent");
 
   return { success: true };
 }

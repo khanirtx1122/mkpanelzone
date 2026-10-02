@@ -4,8 +4,25 @@ import { useState, useEffect } from "react";
 import { X, AlertTriangle, CheckCircle2, Siren, Info } from "lucide-react";
 import Link from "next/link";
 import { Announcement } from "@prisma/client";
+import { useSessionHint } from "./useSessionHint";
 
-export function AnnouncementBar({ announcement }: { announcement: Announcement | null }) {
+export function AnnouncementBar({
+  announcement,
+  memberAnnouncement,
+}: {
+  announcement: Announcement | null;
+  /** Scope=MEMBERS variant, shown to a signed-in customer. */
+  memberAnnouncement?: Announcement | null;
+}) {
+  const loggedIn = useSessionHint();
+
+  /* Audience selection happens in the browser so the root layout does not have
+     to read the session cookie — that read forced every public page to render
+     dynamically. The announcement rows themselves are still chosen on the
+     server and cached. */
+  const shown =
+    loggedIn && memberAnnouncement ? memberAnnouncement : announcement;
+
   const [isVisible, setIsVisible] = useState(() => {
     // Read once at mount — no effect needed for the initial visibility decision.
     if (typeof window === "undefined") return false;
@@ -13,26 +30,36 @@ export function AnnouncementBar({ announcement }: { announcement: Announcement |
   });
 
   useEffect(() => {
-    if (!announcement) return;
+    if (!shown) return;
 
     // Check if dismissed
-    const dismissed = sessionStorage.getItem(`announcement_dismissed_${announcement.id}`);
+    let dismissed: string | null = null;
+    try {
+      dismissed = sessionStorage.getItem(`announcement_dismissed_${shown.id}`);
+    } catch {
+      // Storage blocked (private mode / older Safari) — just show the bar.
+      dismissed = null;
+    }
     if (dismissed) {
       // Deferred a tick so the state update isn't synchronous in the effect body.
       const t = setTimeout(() => setIsVisible(false), 0);
       return () => clearTimeout(t);
     }
-  }, [announcement]);
+  }, [shown]);
 
-  if (!announcement || !isVisible) return null;
+  if (!shown || !isVisible) return null;
 
   const handleDismiss = () => {
     setIsVisible(false);
-    sessionStorage.setItem(`announcement_dismissed_${announcement.id}`, "true");
+    try {
+      sessionStorage.setItem(`announcement_dismissed_${shown.id}`, "true");
+    } catch {
+      /* storage blocked — dismiss still applies for this view */
+    }
   };
 
   const getStyle = () => {
-    switch (announcement.type) {
+    switch (shown.type) {
       case "WARNING":
         return { Icon: AlertTriangle, background: "linear-gradient(90deg,#9A5B00,#C77B08)", border: "rgba(255,255,255,0.14)" };
       case "SUCCESS":
@@ -59,15 +86,15 @@ export function AnnouncementBar({ announcement }: { announcement: Announcement |
         <Icon size={14} className="opacity-90" />
       </div>
 
-      {announcement.link ? (
-        <Link href={announcement.link} className="flex-1 text-center hover:opacity-85 transition-opacity duration-150 group">
+      {shown.link ? (
+        <Link href={shown.link} className="flex-1 text-center hover:opacity-85 transition-opacity duration-150 group">
           <span className="inline-block text-[13px] sm:text-sm font-bold tracking-wide group-hover:underline underline-offset-2">
-            {announcement.message}
+            {shown.message}
           </span>
         </Link>
       ) : (
         <div className="flex-1 text-center text-[13px] sm:text-sm font-bold tracking-wide">
-          {announcement.message}
+          {shown.message}
         </div>
       )}
 

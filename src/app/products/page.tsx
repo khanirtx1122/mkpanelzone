@@ -1,9 +1,13 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { ProductsClient } from "./ProductsClient";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+/* Served from cache and refreshed in the background — public pages must not be
+   rendered from scratch on every visit, nor frozen at build time. The previous
+   `force-dynamic` opt-out meant every visit re-queried the catalogue. */
+export const revalidate = 60;
 
 export default async function ProductsPage() {
   const products = await prisma.product.findMany({
@@ -44,9 +48,37 @@ export default async function ProductsPage() {
           </div>
         </div>
 
-        <ProductsClient initialProducts={products as any} />
+        {/* ProductsClient reads useSearchParams, which requires a Suspense
+            boundary for the page to stay prerenderable/cacheable. */}
+        <Suspense fallback={<ProductsGridSkeleton />}>
+          <ProductsClient initialProducts={products as any} />
+        </Suspense>
         
       </div>
+    </div>
+  );
+}
+
+/** Static, animation-free placeholder shown while the grid hydrates. */
+function ProductsGridSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-[22px] border border-border-subtle bg-surface-glass overflow-hidden"
+        >
+          <div className="aspect-[16/8] bg-foreground/5 sk-shimmer" />
+          <div className="p-5 space-y-3">
+            <div className="h-4 w-3/5 rounded bg-foreground/5 sk-shimmer" />
+            <div className="h-3 w-4/5 rounded bg-foreground/5 sk-shimmer" />
+            <div className="h-9 w-full rounded-[12px] bg-foreground/5 sk-shimmer" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

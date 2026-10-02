@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -111,21 +112,45 @@ export async function ensureCorePlatforms(): Promise<void> {
 /**
  * Every platform, ordered for display. Used by Admin (includes disabled rows
  * so the owner can re-enable them).
+ *
+ * Cached under the "platforms" tag: the admin sidebar, the customers page and
+ * the platform manager all read this on every navigation, and it used to cost
+ * a table scan plus the seed check each time. Platform writes call
+ * revalidateTag("platforms"), so edits appear immediately.
  */
+const PLATFORM_SELECT = {
+  id: true,
+  code: true,
+  name: true,
+  description: true,
+  iconKey: true,
+  isEnabled: true,
+  sortOrder: true,
+} as const;
+
+const readAllPlatforms = unstable_cache(
+  async () => {
+    await ensureCorePlatforms();
+    return prisma.platform.findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: PLATFORM_SELECT,
+    });
+  },
+  ["platforms-all"],
+  { tags: ["platforms"], revalidate: 300 }
+);
+
 export async function listAllPlatforms(): Promise<PlatformRecord[]> {
-  await ensureCorePlatforms();
-  return prisma.platform.findMany({
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-      iconKey: true,
-      isEnabled: true,
-      sortOrder: true,
-    },
-  });
+  try {
+    return await readAllPlatforms();
+  } catch {
+    // A cache failure must never blank the admin panel.
+    await ensureCorePlatforms();
+    return prisma.platform.findMany({
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: PLATFORM_SELECT,
+    });
+  }
 }
 
 /**
@@ -136,22 +161,11 @@ export async function listAllPlatforms(): Promise<PlatformRecord[]> {
  * list rather than rendering an empty Access screen.
  */
 export async function listActivePlatforms(): Promise<PlatformRecord[]> {
-  await ensureCorePlatforms();
-  const rows = await prisma.platform.findMany({
-    where: { isEnabled: true },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-      iconKey: true,
-      isEnabled: true,
-      sortOrder: true,
-    },
-  });
+  const all = await listAllPlatforms();
+  const rows = all.filter((p) => p.isEnabled);
   if (rows.length > 0) return rows;
-  return listAllPlatforms();
+  // Self-healing: an all-disabled table must not dead-end the Access screen.
+  return all;
 }
 
 /** Just the codes — used for cheap validation without loading full rows. */
@@ -165,18 +179,14 @@ export async function listPlatformCodes(onlyEnabled = false): Promise<Set<string
 }
 
 export async function findPlatformByCode(code: string): Promise<PlatformRecord | null> {
-  return prisma.platform.findUnique({
-    where: { code },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-      iconKey: true,
-      isEnabled: true,
-      sortOrder: true,
-    },
-  });
+  /* Served from the tagged cache — this runs on every dashboard render and
+     every resource save for validation. */
+  try {
+    const all = await readAllPlatforms();
+    return all.find((p) => p.code === code) ?? null;
+  } catch {
+    return prisma.platform.findUnique({ where: { code }, select: PLATFORM_SELECT });
+  }
 }
 
 /** Human label for a platform code; falls back to the code itself. */

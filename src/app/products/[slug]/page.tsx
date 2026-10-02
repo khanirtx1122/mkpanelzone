@@ -45,6 +45,9 @@ const getBadgeForSlug = (slug: string) => {
   return "";
 };
 
+/* Served from cache and refreshed in the background — public pages must not be rendered from scratch on every visit, nor frozen at build time. */
+export const revalidate = 60;
+
 export default async function ProductDetailsPage({ params }: Props) {
   const resolvedParams = await params;
   const product = await prisma.product.findUnique({

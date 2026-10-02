@@ -5,18 +5,32 @@ import { Popup } from "@prisma/client";
 import { X } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { useSessionHint } from "@/components/layout/useSessionHint";
 
-export function GlobalPopupProvider({ popups }: { popups: Popup[] }) {
+export function GlobalPopupProvider({
+  popups,
+  memberPopups = [],
+}: {
+  popups: Popup[];
+  /** Scope=MEMBERS variants, shown to a signed-in customer. */
+  memberPopups?: Popup[];
+}) {
+  const loggedIn = useSessionHint();
+
+  /* Audience is resolved in the browser (see useSessionHint) so the layout can
+     stay cacheable. Only the candidate rows come from the server. */
+  const visible = loggedIn ? [...memberPopups, ...popups] : popups;
+
   const [activePopup, setActivePopup] = useState<Popup | null>(null);
 
   useEffect(() => {
-    if (popups.length === 0) return;
+    if (visible.length === 0) return;
 
     // Evaluate which popup to show
     const now = new Date().getTime();
 
     // Sort by most recently created, or however you want to prioritize
-    const validPopups = popups.filter(p => {
+    const validPopups = visible.filter(p => {
       if (!p.active) return false;
       if (p.startDate && new Date(p.startDate).getTime() > now) return false;
       if (p.endDate && new Date(p.endDate).getTime() < now) return false;
@@ -53,7 +67,8 @@ export function GlobalPopupProvider({ popups }: { popups: Popup[] }) {
         }
       }
     }
-  }, [popups]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn, popups, memberPopups]);
 
   const handleClose = () => {
     if (!activePopup) return;

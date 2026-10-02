@@ -15,11 +15,17 @@ export function SuccessAutoRedirect() {
     hasRedirected.current = true;
 
     try {
-      const pendingUrl = sessionStorage.getItem("pendingWhatsAppRedirect");
+      const stored = sessionStorage.getItem("pendingWhatsAppRedirect");
+      /* sessionStorage serialises a null value to the literal string "null".
+         When OWNER_WHATSAPP_NUMBER is unset the checkout stored "null", and
+         assign("null") from /order/success resolved as a relative URL and
+         landed the buyer on /order/null (404). Only an absolute http(s) URL
+         is ever a valid target. */
+      const pendingUrl = stored && /^https?:\/\//i.test(stored) ? stored : null;
+      if (stored) sessionStorage.removeItem("pendingWhatsAppRedirect");
+
       if (pendingUrl) {
         setRedirectUrl(pendingUrl);
-        // Clear it so it doesn't trigger on refresh
-        sessionStorage.removeItem("pendingWhatsAppRedirect");
         
         // Auto redirect after a short delay so they see the success page briefly
         setIsRedirecting(true);

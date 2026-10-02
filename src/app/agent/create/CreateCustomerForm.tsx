@@ -24,6 +24,7 @@ export function CreateCustomerForm({
   }, [state, router]);
 
   const [platform, setPlatform] = useState(platforms[0]?.code ?? "ANDROID");
+  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">("PAID");
 
   return (
     <form ref={formRef} action={formAction} className="space-y-5">
@@ -53,13 +54,45 @@ export function CreateCustomerForm({
         <p className="text-xs text-brand-ink-3">The default package for the selected platform will be automatically assigned.</p>
       </div>
 
+      {/* Payment / access gate for the created customer. */}
+      <div>
+        <label className="block text-sm font-bold text-brand-ink-2 mb-2">Payment Status</label>
+        <input type="hidden" name="paymentStatus" value={paymentStatus} />
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("PAID")}
+            aria-pressed={paymentStatus === "PAID"}
+            className={`rounded-xl px-4 py-3 min-h-[48px] text-sm font-bold uppercase tracking-wider border transition-colors ${
+              paymentStatus === "PAID"
+                ? "bg-green-500/15 text-green-400 border-green-500/40"
+                : "bg-foreground/5 text-brand-ink-3 border-border-subtle hover:border-foreground/25"
+            }`}
+          >
+            Paid
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentStatus("UNPAID")}
+            aria-pressed={paymentStatus === "UNPAID"}
+            className={`rounded-xl px-4 py-3 min-h-[48px] text-sm font-bold uppercase tracking-wider border transition-colors ${
+              paymentStatus === "UNPAID"
+                ? "bg-amber-500/15 text-amber-400 border-amber-500/40"
+                : "bg-foreground/5 text-brand-ink-3 border-border-subtle hover:border-foreground/25"
+            }`}
+          >
+            Unpaid
+          </button>
+        </div>
+      </div>
+
       <div>
         <label className="block text-sm font-bold text-brand-ink-2 mb-2">Payment Proof (Screenshot)</label>
         <div className="relative group cursor-pointer border-2 border-dashed border-border-subtle rounded-xl p-6 text-center hover:border-brand-blue-500/50 transition-colors bg-foreground/5">
           <input 
             type="file" 
             name="paymentProof" 
-            accept="image/*" 
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf" 
             required 
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
@@ -67,10 +100,14 @@ export function CreateCustomerForm({
             <div className="w-12 h-12 rounded-full bg-brand-blue-500/10 flex items-center justify-center text-brand-blue-500 group-hover:scale-110 transition-transform">
               <Upload size={20} />
             </div>
-            <p className="text-sm font-bold text-foreground mt-2">Click or drag image to upload</p>
-            <p className="text-xs text-brand-ink-3">JPEG, PNG up to 5MB</p>
+            <p className="text-sm font-bold text-foreground mt-2">Click to attach the payment screenshot</p>
+            <p className="text-xs text-brand-ink-3">JPEG, PNG, WebP or PDF · up to 8 MB</p>
           </div>
         </div>
+        <p className="text-xs text-brand-ink-3 mt-2">
+          The screenshot is uploaded to private-account storage and is only visible to the Owner
+          Admin on this customer record.
+        </p>
       </div>
 
       {state?.error && (
