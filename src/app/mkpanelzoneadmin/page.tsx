@@ -30,17 +30,30 @@ function AnalyticsFallback() {
 }
 
 export default async function AdminDashboardPage() {
-  /* The 24h boundary is computed in the database (now() - interval), keeping
-     the render pure and the clock consistent with other SQL aggregates. */
+  /* The 24h pending count runs as raw SQL with the EXACT identifiers Prisma
+     created: the table is "Order" and the column is "createdAt" — both
+     camelCase and quoted, because the Order model has no @@map/@map. The
+     previous version used `orders`/`created_at`, which Postgres rejected with
+     42703 (column does not exist) and crashed the whole dashboard render.
+     A failed count now degrades to 0 instead of taking the Admin down. */
+  const countPendingOrders24h = async (): Promise<number> => {
+    try {
+      const rows = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count
+        FROM "Order"
+        WHERE status = 'pending' AND "createdAt" >= now() - interval '24 hours'`;
+      return rows[0]?.count ?? 0;
+    } catch (error) {
+      console.error("[dashboard] 24h pending count failed, showing 0:", error);
+      return 0;
+    }
+  };
+
   const [totalAgents, totalCustomers, pendingOrders, newOrders24h, customersByPlatform, platforms] = await Promise.all([
     prisma.agent.count({ where: { role: "AGENT" } }),
     prisma.customer.count(),
     prisma.order.count({ where: { status: "pending" } }),
-    prisma.$queryRaw<{ count: number }[]>`
-      SELECT COUNT(*)::int AS count
-      FROM orders
-      WHERE status = 'pending' AND created_at >= now() - interval '24 hours'`
-      .then((rows) => rows[0]?.count ?? 0),
+    countPendingOrders24h(),
     prisma.customer.groupBy({
       by: ['platformType'],
       _count: {
