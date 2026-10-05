@@ -4,7 +4,6 @@ import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { AdminImageUploader } from "@/components/ui/AdminImageUploader";
-import { requireOwner } from "@/lib/owner";
 
 export default async function EditPopupPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -20,7 +19,6 @@ export default async function EditPopupPage(props: { params: Promise<{ id: strin
 
   async function savePopup(formData: FormData) {
     "use server";
-    if (!(await requireOwner())) redirect("/");
 
     const title = formData.get("title") as string;
     const message = formData.get("message") as string;
@@ -58,7 +56,6 @@ export default async function EditPopupPage(props: { params: Promise<{ id: strin
 
   async function deletePopup() {
     "use server";
-    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.popup.delete({ where: { id: params.id } });

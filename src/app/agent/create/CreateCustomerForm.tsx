@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import { Upload, CheckCircle2 } from "lucide-react";
+import { compressProofImage } from "@/lib/compressProof";
 
 export function CreateCustomerForm({
   platforms,
@@ -15,6 +16,21 @@ export function CreateCustomerForm({
   const [state, formAction, pending] = useActionState<any, FormData>(agentCreateCustomer, null);
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
+
+  /* Compress the proof in the browser before upload (~200 KB target).
+     Falls back to the original file if the browser can't compress. */
+  const handleProofChange = async () => {
+    const input = proofInputRef.current;
+    const file = input?.files?.[0];
+    if (!input || !file) return;
+    const optimized = await compressProofImage(file);
+    if (optimized !== file) {
+      const dt = new DataTransfer();
+      dt.items.add(optimized);
+      input.files = dt.files;
+    }
+  };
 
   useEffect(() => {
     if (state?.success) {
@@ -89,11 +105,13 @@ export function CreateCustomerForm({
       <div>
         <label className="block text-sm font-bold text-brand-ink-2 mb-2">Payment Proof (Screenshot)</label>
         <div className="relative group cursor-pointer border-2 border-dashed border-border-subtle rounded-xl p-6 text-center hover:border-brand-blue-500/50 transition-colors bg-foreground/5">
-          <input 
-            type="file" 
-            name="paymentProof" 
-            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf" 
-            required 
+          <input
+            type="file"
+            name="paymentProof"
+            ref={proofInputRef}
+            onChange={handleProofChange}
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf"
+            required
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">

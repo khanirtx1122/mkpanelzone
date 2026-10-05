@@ -19,6 +19,8 @@ model Customer {
   /// Access gate: PAID | UNPAID. Defaults to PAID so every pre-existing
   /// customer keeps the exact access they had before this column existed.
   paymentStatus     String           @default("PAID")
+  /// Optional access expiry. Null = no expiry (legacy rows keep working).
+  expiresAt         DateTime?
   createdSource     String           @default("MIGRATED")
   createdByAgentId  String?
   /// Payment proof reference. Stores a STORAGE OBJECT PATH (payment-proofs/…)
@@ -86,6 +88,7 @@ model PlatformBranch {
   customers Customer[]
   resources PackageResource[]
   packages  Package[]
+  products  Product[]
 
   @@unique([platformType, slug])
   // Branch lookup is always "this platform, ordered by sortOrder".
@@ -99,6 +102,13 @@ model Agent {
   passwordHash     String
   role             String     @default("AGENT")
   status           String     @default("ACTIVE")
+  /// Reseller contact (WhatsApp, digits-only international format).
+  phone            String?
+  /// Subscription plan key: M1 | M2 | M3 | M6 | Y1 | PERMANENT (see lib/resellerPlans.ts).
+  subscriptionPlan String?
+  subscriptionStart   DateTime?
+  /// Null expiry = permanent — never render a fake countdown for it.
+  subscriptionExpiry  DateTime?
   lastLoginAt      DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
@@ -170,6 +180,14 @@ model Product {
   description        String?
   price              Float
   active             Boolean  @default(true)
+  /// Per-product sale. Takes priority over the global offer; never stacked.
+  saleEnabled        Boolean  @default(false)
+  salePrice          Float?
+  saleStartsAt       DateTime?
+  saleEndsAt         DateTime?
+  /// Dynamic platform/branch assignment used by checkout and account creation.
+  platformType       String?
+  branchId           String?
   coverImageUrl      String?
   demoVideoUrl       String?
   demoVideoType      String?  @default("DIRECT")
@@ -181,8 +199,10 @@ model Product {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   orders             Order[]
+  branch             PlatformBranch? @relation(fields: [branchId], references: [id])
 
   @@index([active, createdAt(sort: Desc)])
+  @@index([platformType])
 }
 
 model Order {

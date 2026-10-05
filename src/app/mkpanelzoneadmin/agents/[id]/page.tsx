@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Key } from "lucide-react";
 import { AgentActions } from "./AgentActions";
+import { ResellerSubscription } from "./ResellerSubscription";
 import { listAllPlatforms } from "@/lib/platforms";
 import { PlatformBadgeIcon } from "../../resources/PlatformBadgeIcon";
 
@@ -18,6 +19,10 @@ export default async function AgentDetailsPage(props: { params: Promise<{ id: st
         createdAt: true,
         lastLoginAt: true,
         role: true,
+        phone: true,
+        subscriptionPlan: true,
+        subscriptionStart: true,
+        subscriptionExpiry: true,
         createdCustomers: {
           orderBy: { createdAt: "desc" },
           take: 25,
@@ -98,6 +103,13 @@ export default async function AgentDetailsPage(props: { params: Promise<{ id: st
           </div>
 
           <AgentActions agentId={agent.id} currentStatus={agent.status} />
+
+          <ResellerSubscription
+            agentId={agent.id}
+            currentPlan={agent.subscriptionPlan}
+            currentPhone={agent.phone}
+            currentExpiry={agent.subscriptionExpiry ? agent.subscriptionExpiry.toISOString() : null}
+          />
         </div>
 
         {/* Right Column: Customers */}

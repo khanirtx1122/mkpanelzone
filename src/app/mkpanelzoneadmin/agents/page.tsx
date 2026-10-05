@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { CreateAgentForm } from "./CreateAgentForm";
-import { UserPlus, ShieldAlert, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserPlus, ShieldAlert, ShieldCheck, ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { AgentFilters } from "./AgentFilters";
+import { RESELLER_PLANS, subscriptionRemaining } from "@/lib/pricing";
 import Link from "next/link";
 
 export const metadata = {
@@ -32,11 +33,15 @@ export default async function ManageAgentsPage(props: {
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: {
-        _count: {
-          select: { createdCustomers: true }
-        }
-      }
+      select: {
+        id: true,
+        username: true,
+        status: true,
+        createdAt: true,
+        subscriptionPlan: true,
+        subscriptionExpiry: true,
+        _count: { select: { createdCustomers: true } },
+      },
     }),
     prisma.agent.count({ where }),
   ]);
@@ -86,6 +91,13 @@ export default async function ManageAgentsPage(props: {
                       <p className="text-xs text-brand-ink-3 mt-1 font-mono">
                         ID: {agent.id.slice(0, 8)} • Created: {agent.createdAt.toLocaleDateString()}
                       </p>
+                      {agent.subscriptionPlan && (
+                        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-brand-blue-400">
+                          <CalendarClock size={11} />
+                          {RESELLER_PLANS.find((p) => p.key === agent.subscriptionPlan)?.label ?? agent.subscriptionPlan}
+                          <span className="text-brand-ink-3 font-normal">· {subscriptionRemaining(agent.subscriptionExpiry)}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

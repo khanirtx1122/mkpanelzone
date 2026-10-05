@@ -30,10 +30,17 @@ function AnalyticsFallback() {
 }
 
 export default async function AdminDashboardPage() {
-  const [totalAgents, totalCustomers, pendingOrders, customersByPlatform, platforms] = await Promise.all([
+  /* The 24h boundary is computed in the database (now() - interval), keeping
+     the render pure and the clock consistent with other SQL aggregates. */
+  const [totalAgents, totalCustomers, pendingOrders, newOrders24h, customersByPlatform, platforms] = await Promise.all([
     prisma.agent.count({ where: { role: "AGENT" } }),
     prisma.customer.count(),
     prisma.order.count({ where: { status: "pending" } }),
+    prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count
+      FROM orders
+      WHERE status = 'pending' AND created_at >= now() - interval '24 hours'`
+      .then((rows) => rows[0]?.count ?? 0),
     prisma.customer.groupBy({
       by: ['platformType'],
       _count: {
@@ -84,7 +91,9 @@ export default async function AdminDashboardPage() {
           </div>
           <p className="text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-1">Unreviewed Orders</p>
           <p className="text-5xl font-black text-white tabular-nums">{pendingOrders}</p>
-          <p className="mt-2 text-xs font-bold uppercase tracking-wider text-amber-400">Review pending payments</p>
+          <p className="mt-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+            {newOrders24h > 0 ? `+${newOrders24h} in the last 24h` : "No new orders in 24h"}
+          </p>
         </Link>
       </div>
 

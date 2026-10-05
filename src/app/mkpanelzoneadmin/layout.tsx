@@ -1,13 +1,9 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, LogOut } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { AdminSubmitButton } from "@/components/admin/AdminButton";
-import { SessionRefresh } from "@/components/admin/SessionRefresh";
 import { getOwnerSession } from "@/lib/owner";
-import { ownerLogout } from "./actions";
 import { listAllPlatforms } from "@/lib/platforms";
 import "@/components/admin/admin.css";
 
@@ -20,18 +16,18 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  /* The panel has no public login page; only a valid bootstrap-created owner
-     session may render it. A 404 keeps the private route undiscoverable. */
+  /* Direct access by explicit project requirement: no login page, no session
+     cookie, no bootstrap token. The owner identity is implicit
+     (auto-provisioned) so audit fields keep working. */
   const owner = await getOwnerSession();
-  if (!owner) notFound();
+  if (!owner) throw new Error("Owner identity unavailable — is the database reachable?");
 
   /* Platforms are needed by the sidebar grouping. Cheap, cached read. */
   const platforms = await listAllPlatforms();
 
   return (
-    <SessionRefresh>
-      <AdminToastProvider>
-        <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-brand-red-500/30">
+    <AdminToastProvider>
+      <div className="min-h-screen bg-black text-white flex flex-col md:flex-row font-sans selection:bg-brand-red-500/30">
         <AdminSidebar username={owner.username} platforms={platforms} />
 
         {/* Main Content Area */}
@@ -48,17 +44,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link href="/" target="_blank" className="hidden sm:flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-brand-ink-2 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg border border-white/5 admin-press">
                 <ExternalLink size={14} /> View Live Site
               </Link>
-              <form action={ownerLogout}>
-                <AdminSubmitButton
-                  variant="secondary"
-                  label="Sign Out"
-                  pendingLabel="Signing out…"
-                  successLabel="Signed out"
-                  className="!text-brand-red-500 !bg-brand-red-500/10 hover:!bg-brand-red-500/20 !border-brand-red-500/20 !px-3 !py-1.5"
-                >
-                  <LogOut size={14} />
-                </AdminSubmitButton>
-              </form>
             </div>
           </header>
 
@@ -70,7 +55,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </main>
         </div>
       </div>
-      </AdminToastProvider>
-    </SessionRefresh>
+    </AdminToastProvider>
   );
 }

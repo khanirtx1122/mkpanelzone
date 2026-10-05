@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
+import { effectivePrice, getGlobalOffer } from "@/lib/pricing";
 import { ProductsClient } from "./ProductsClient";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
@@ -10,9 +11,18 @@ import { ChevronRight } from "lucide-react";
 export const revalidate = 60;
 
 export default async function ProductsPage() {
-  const products = await prisma.product.findMany({
-    where: { active: true },
-    orderBy: { createdAt: 'desc' }
+  const [productsRaw, offer] = await Promise.all([
+    prisma.product.findMany({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' }
+    }),
+    getGlobalOffer(),
+  ]);
+  // Deterministic pricing (product sale > global offer) — the grid must show
+  // exactly what checkout will charge.
+  const products = productsRaw.map((p) => {
+    const e = effectivePrice(p, offer);
+    return { ...p, price: e.price, originalPrice: e.source ? e.originalPrice : null };
   });
 
   return (

@@ -10,6 +10,7 @@ import { Steps } from "@/components/ui/Steps";
 import { ProductCard } from "@/components/ui/ProductCard";
 import { ProductVideoPlayer } from "@/components/ui/ProductVideoPlayer";
 import { StickyPurchaseBar } from "./StickyPurchaseBar";
+import { effectivePrice, getGlobalOffer } from "@/lib/pricing";
 import { Metadata } from "next";
 
 interface Props {
@@ -58,6 +59,9 @@ export default async function ProductDetailsPage({ params }: Props) {
     notFound();
   }
 
+  const offer = await getGlobalOffer();
+  const priced = effectivePrice(product, offer);
+
   const content = productContent[product.slug];
   const badge = getBadgeForSlug(product.slug);
   
@@ -82,7 +86,7 @@ export default async function ProductDetailsPage({ params }: Props) {
     "description": product.description,
     "offers": {
       "@type": "Offer",
-      "price": product.price,
+      "price": priced.price,
       "priceCurrency": "USD",
       "availability": "https://schema.org/InStock",
       "url": `https://mkpanel.zone/products/${product.slug}`
@@ -163,7 +167,17 @@ export default async function ProductDetailsPage({ params }: Props) {
               </h1>
               
               <div className="flex items-end gap-3 mb-6">
-                <div className="font-extrabold text-foreground tracking-tight" style={{ fontSize: "clamp(32px, 7vw, 48px)" }}>PKR {product.price.toFixed(2)}</div>
+                <div className="flex items-end gap-3 flex-wrap">
+                  {priced.source ? (
+                    <>
+                      <div className="font-extrabold text-green-400 tracking-tight" style={{ fontSize: "clamp(32px, 7vw, 48px)" }}>PKR {priced.price.toFixed(2)}</div>
+                      <div className="font-bold text-brand-ink-3 line-through mb-1.5">PKR {priced.originalPrice.toFixed(2)}</div>
+                      <div className="text-[11px] font-bold uppercase tracking-widest text-green-400 bg-green-500/10 border border-green-500/25 rounded-full px-2.5 py-1 mb-2">{priced.percentOff}% OFF</div>
+                    </>
+                  ) : (
+                    <div className="font-extrabold text-foreground tracking-tight" style={{ fontSize: "clamp(32px, 7vw, 48px)" }}>PKR {priced.price.toFixed(2)}</div>
+                  )}
+                </div>
                 {content && (
                   <div className="text-[12px] sm:text-[14px] text-brand-ink-3 font-bold uppercase tracking-widest mb-1.5">{content.durationLabel}</div>
                 )}
@@ -262,7 +276,7 @@ export default async function ProductDetailsPage({ params }: Props) {
         
       </div>
       
-      <StickyPurchaseBar price={product.price} slug={product.slug} name={product.name} />
+      <StickyPurchaseBar price={priced.price} slug={product.slug} name={product.name} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Key, PackageOpen, CreditCard, Tag } from "lucide-react";
 import { CustomerActions } from "./CustomerActions";
+import { CustomerValidity } from "./CustomerValidity";
 import { listAllPlatforms } from "@/lib/platforms";
 import { PlatformBadgeIcon } from "../../resources/PlatformBadgeIcon";
 import { resolveProofWithExistence } from "@/lib/paymentProof";
@@ -159,8 +160,13 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
         </div>
 
         {/* Right Column: Actions */}
-        <div className="md:col-span-2">
-          <CustomerActions 
+        <div className="md:col-span-2 space-y-6">
+          <CustomerValidity
+            customerId={customer.id}
+            expiresAt={customer.expiresAt ? customer.expiresAt.toISOString() : null}
+            identifier={customer.identifier}
+          />
+          <CustomerActions
             customerId={customer.id} 
             currentStatus={customer.status} 
             deviceCount={customer.devices.length}

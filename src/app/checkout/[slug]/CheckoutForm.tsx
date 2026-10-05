@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { ShieldCheck, AlertTriangle, CheckCircle2, MessageCircle, CreditCard, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { submitOrder } from "@/app/actions";
+import { compressProofImage } from "@/lib/compressProof";
 
 export interface PaymentMethodOption {
   id: string;
@@ -111,6 +112,22 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
     setStatus("loading");
     setErrors({});
 
+    /* Compress the screenshot in the browser (~200 KB target) before it ever
+       leaves the device — faster upload on mobile data, less storage. The
+       original file is used untouched if compression is impossible. */
+    let proofFile: File | undefined;
+    try {
+      const chosen = fileInputRef.current?.files?.[0];
+      proofFile = chosen ? await compressProofImage(chosen) : undefined;
+    } catch {
+      proofFile = fileInputRef.current?.files?.[0];
+    }
+    if (!proofFile) {
+      setStatus("error");
+      setErrors({ paymentProof: "Payment proof screenshot is required." });
+      return;
+    }
+
     const formData = new FormData();
     formData.append("productId", productId);
     formData.append("email", email);
@@ -119,7 +136,7 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
     if (methodId) formData.append("paymentMethod", methodId);
     formData.append("honeypot", honeypot);
     formData.append("idempotencyKey", idempotencyKey);
-    formData.append("paymentProof", fileInputRef.current!.files![0]);
+    formData.append("paymentProof", proofFile);
 
     try {
       const res = await submitOrder(formData);

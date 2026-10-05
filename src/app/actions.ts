@@ -103,7 +103,12 @@ export async function submitOrder(formData: FormData) {
     let parsedAmount = parseFloat(parsed.data.amountReported.replace(/,/g, ''));
     if (isNaN(parsedAmount)) parsedAmount = 0;
 
-    const amountMatches = parsedAmount === product.price;
+    // Charge against the CURRENT effective price (product sale / global offer
+    // / list price) so admin-configured pricing and checkout always agree.
+    const { effectivePrice, getGlobalOffer } = await import("@/lib/pricing");
+    const offer = await getGlobalOffer();
+    const effective = effectivePrice(product, offer);
+    const amountMatches = parsedAmount === effective.price;
 
     /* Resolve the customer's chosen payment method to its display name.
        Only a method that actually exists and is active is ever echoed back,
@@ -139,7 +144,7 @@ export async function submitOrder(formData: FormData) {
       data: {
         orderNumber,
         productId: product.id,
-        priceSnapshot: product.price,
+        priceSnapshot: effective.price,
         customerEmail: parsed.data.email,
         customerDiscord: parsed.data.discord || "",
         paymentProofPath: upload.path,
@@ -174,10 +179,10 @@ Order ID: ${orderNumber}
 Date: ${dateStr}
 
 *Product:* ${product.name}
-*Plan price:* PKR ${product.price.toFixed(2)}
+*Plan price:* PKR ${effective.price.toFixed(2)}
 *Payment method:* ${paymentMethodName}
 *Amount sent (typed by customer):* PKR ${parsedAmount.toFixed(2)}
-*Amount check:* ${amountMatches ? "MATCHES" : `MISMATCH - expected PKR ${product.price.toFixed(2)}`}
+*Amount check:* ${amountMatches ? "MATCHES" : `MISMATCH - expected PKR ${effective.price.toFixed(2)}`}
 
 *Customer name:* ${truncate(parsed.data.email.split('@')[0], 80)}
 *Contact number:* ${truncate(parsed.data.email, 120)}
@@ -497,13 +502,12 @@ export async function managementLogin(formData: FormData) {
 // ==========================================
 
 /**
- * Owner authorization.
+ * Owner authorization for owner-only actions.
  *
- * Previously this only JSON-parsed the `agent_session` cookie and trusted
- * `session.role === "OWNER"` — a forged cookie was enough to obtain owner
- * privileges. It now delegates to the shared, database-verified
- * `requireOwner()` (validates the `owner_session` cookie against an ACTIVE
- * OWNER row) so a client cannot mint a session by hand.
+ * Delegates to the shared implicit-owner resolver (`requireOwner()`), which
+ * always resolves the auto-provisioned ACTIVE OWNER row. The admin panel is
+ * direct-access by project requirement; this guard exists so owner-only
+ * mutations keep their "created by" attribution.
  */
 async function ensureOwner() {
   const { requireOwner } = await import("@/lib/owner");

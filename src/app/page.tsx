@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { Shield, Zap, Sparkles, ArrowRight, Users, Lock, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { effectivePrice, getGlobalOffer } from "@/lib/pricing";
 
 /* Incrementally revalidated instead of rendered from scratch on every visit:
    the homepage is served from cache and refreshed in the background, so product
@@ -14,10 +15,18 @@ export const revalidate = 60;
 
 export default async function Home() {
   // Fetch up to 9 products for the main grid
-  const mainProducts = await prisma.product.findMany({
+  const mainProductsRaw = await prisma.product.findMany({
     where: { active: true },
     orderBy: { createdAt: "desc" },
     take: 9,
+  });
+
+  // Apply the deterministic pricing rule (product sale > global offer) so
+  // every card shows exactly what checkout will charge.
+  const offer = await getGlobalOffer();
+  const mainProducts = mainProductsRaw.map((p) => {
+    const e = effectivePrice(p, offer);
+    return { ...p, price: e.price, originalPrice: e.source ? e.originalPrice : null };
   });
 
   // Reuse the top 3 for the featured section below

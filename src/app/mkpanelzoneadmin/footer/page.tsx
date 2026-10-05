@@ -1,14 +1,33 @@
 import { getSettings } from "@/lib/settings";
 import { Save, PanelBottom } from "lucide-react";
 import { saveSettings } from "../actions";
+import { AdminSubmitButton } from "@/components/admin/AdminButton";
+import { SocialLinksManager } from "./SocialLinksManager";
+import type { SocialLink } from "../actions";
+
+function parseSocialLinks(raw: string | undefined): SocialLink[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as SocialLink[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((l) => l && typeof l.platform === "string" && typeof l.url === "string");
+  } catch {
+    return [];
+  }
+}
 
 export default async function FooterSettingsPage() {
-  const settings = await getSettings([
-    "footer_copyright",
-    "footer_description",
-    "footer_social_discord",
-    "footer_social_youtube",
+  const [settings, socialRaw] = await Promise.all([
+    getSettings(["footer_copyright", "footer_description", "footer_social_discord", "footer_social_youtube"]),
+    getSettings(["social_links"]),
   ]);
+  // Seed the dynamic manager from any legacy per-platform settings so an
+  // existing deployment keeps its links after the upgrade.
+  const legacy: SocialLink[] = [
+    settings.footer_social_discord ? { platform: "discord", url: settings.footer_social_discord, enabled: true } : null,
+    settings.footer_social_youtube ? { platform: "youtube", url: settings.footer_social_youtube, enabled: true } : null,
+  ].filter((l): l is SocialLink => l !== null);
+  const socialLinks = parseSocialLinks(socialRaw.social_links);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -51,37 +70,14 @@ export default async function FooterSettingsPage() {
             <h2 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-2">
               <PanelBottom className="text-brand-blue-400" size={18} /> Social Links
             </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">Discord Link</label>
-                <input 
-                  type="text" 
-                  name="setting_footer_social_discord" 
-                  defaultValue={settings.footer_social_discord || ""}
-                  className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors font-mono" 
-                />
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">YouTube Link</label>
-                <input 
-                  type="text" 
-                  name="setting_footer_social_youtube" 
-                  defaultValue={settings.footer_social_youtube || ""}
-                  className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-blue-500/50 transition-colors font-mono" 
-                />
-              </div>
-            </div>
+            <SocialLinksManager initial={socialLinks.length > 0 ? socialLinks : legacy} />
           </div>
 
           <div className="pt-6 border-t border-white/5 flex items-center justify-end">
-            <button 
-              type="submit" 
-              className="inline-flex items-center gap-2 px-6 py-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-colors"
-            >
-              <Save size={16} /> Save Footer Settings
-            </button>
+            <AdminSubmitButton label="Save Footer Settings" pendingLabel="Saving…" successLabel="Saved ✓">
+              <Save size={16} />
+            </AdminSubmitButton>
           </div>
         </form>
       </div>

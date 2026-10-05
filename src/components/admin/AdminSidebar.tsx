@@ -22,8 +22,9 @@ import {
   LifeBuoy, 
   Gift,
   Globe,
-  Settings, 
-  ScrollText 
+  Settings,
+  ScrollText,
+  Image as ImageIcon
 } from "lucide-react";
 import { type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -53,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Customers", href: "/mkpanelzoneadmin/customers", icon: UserPlus },
       { name: "Agents", href: "/mkpanelzoneadmin/agents", icon: Users },
       { name: "Orders", href: "/mkpanelzoneadmin/orders", icon: ShoppingCart },
+      { name: "Proof Storage", href: "/mkpanelzoneadmin/proofs", icon: ImageIcon },
     ]
   },
   {

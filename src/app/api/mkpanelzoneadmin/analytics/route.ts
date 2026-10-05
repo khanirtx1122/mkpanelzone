@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSnapshot } from "@/lib/analyticsAdmin";
-import { requireOwner } from "@/lib/owner";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +13,6 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   try {
-    const owner = await requireOwner();
-    if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
     const site = req.headers.get("sec-fetch-site");
     if (site && site !== "same-origin" && site !== "none") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

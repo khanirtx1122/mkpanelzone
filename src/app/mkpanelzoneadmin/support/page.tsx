@@ -1,7 +1,20 @@
 import { getSettings } from "@/lib/settings";
-import { Save, LifeBuoy, MessageCircle } from "lucide-react";
+import { Save, LifeBuoy, MessageCircle, Users } from "lucide-react";
 import { saveSettings } from "../actions";
 import { AdminSubmitButton } from "@/components/admin/AdminButton";
+import { WhatsAppAssistants } from "./WhatsAppAssistants";
+import type { WhatsAppAssistant } from "../actions";
+
+function parseAssistants(raw: string | undefined): WhatsAppAssistant[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as WhatsAppAssistant[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((a) => a && typeof a.name === "string" && typeof a.number === "string");
+  } catch {
+    return [];
+  }
+}
 
 export default async function SupportSettingsPage() {
   const settings = await getSettings([
@@ -9,7 +22,9 @@ export default async function SupportSettingsPage() {
     "support_whatsapp_message",
     "support_whatsapp_label",
     "support_faq_text",
+    "support_whatsapp_assistants",
   ]);
+  const assistants = parseAssistants(settings.support_whatsapp_assistants);
 
   const faqLines = (settings.support_faq_text || "").split(/\r?\n/).filter(Boolean);
 
@@ -34,7 +49,7 @@ export default async function SupportSettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold tracking-widest uppercase text-brand-ink-3">
-                  WhatsApp Number
+                  Primary WhatsApp Number
                 </label>
                 <input
                   type="tel"
@@ -84,6 +99,17 @@ export default async function SupportSettingsPage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* ── MULTIPLE WHATSAPP ASSISTANTS ── */}
+          <div className="space-y-5 pt-4">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-2">
+              <Users className="text-brand-blue-400" size={18} /> WhatsApp Assistants
+            </h2>
+            <p className="text-xs text-brand-ink-3 font-mono">
+              Multiple support contacts, shown in order. The Primary number above stays the main CTA target.
+            </p>
+            <WhatsAppAssistants initial={assistants} />
           </div>
 
           <div className="space-y-6 pt-4">

@@ -20,7 +20,13 @@ function WhatsAppIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-export function Footer({ whatsappHref }: { whatsappHref?: string | null }) {
+export function Footer({
+  whatsappHref,
+  socialLinks = [],
+}: {
+  whatsappHref?: string | null;
+  socialLinks?: { platform: string; url: string }[];
+}) {
   const pathname = usePathname();
 
   if (
@@ -107,7 +113,21 @@ export function Footer({ whatsappHref }: { whatsappHref?: string | null }) {
             &copy; {new Date().getFullYear()} MK Panel Zone. All rights reserved.
           </p>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap justify-center">
+            {/* Owner-managed social links — admin-controlled, icon per platform */}
+            {socialLinks.map((link) => (
+              <a
+                key={link.platform + link.url}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.platform}
+                className="text-[12px] font-bold capitalize text-brand-ink-3 hover:text-brand-neon-blue transition-colors duration-150"
+              >
+                {link.platform}
+              </a>
+            ))}
+
             {/* WhatsApp support — the single support entry point */}
             {whatsappHref && (
               <a

@@ -6,7 +6,6 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { DeleteResourceButton } from "../DeleteResourceButton";
 import { listAllPlatforms, findPlatformByCode } from "@/lib/platforms";
-import { requireOwner } from "@/lib/owner";
 
 export default async function EditResourcePage(props: { 
   params: Promise<{ id: string }>,
@@ -55,7 +54,6 @@ export default async function EditResourcePage(props: {
 
   async function saveResource(formData: FormData) {
     "use server";
-    if (!(await requireOwner())) redirect("/");
 
     const name = ((formData.get("name") as string) || "").trim();
     const type = ((formData.get("type") as string) || "LINK").toUpperCase();
@@ -126,8 +124,21 @@ export default async function EditResourcePage(props: {
       }
       revalidatePath("/mkpanelzoneadmin/resources");
       revalidatePath("/mkpanelzoneadmin/resources/all");
+
+      /* "Save & Add Another": bounce straight back into a fresh create form
+         with the same platform/branch/package context preselected. */
+      if (formData.get("then") === "another" && isNew) {
+        const nextParams = new URLSearchParams();
+        if (platformType) nextParams.set("platform", platformType);
+        if (branchId) nextParams.set("branchId", branchId);
+        if (packageId) nextParams.set("packageId", packageId);
+        if (returnTo === "all") nextParams.set("returnTo", "all");
+        redirect(`/mkpanelzoneadmin/resources/new?${nextParams.toString()}`);
+      }
       redirect(backHref);
     } catch (error) {
+      // redirect() throws internally — pass it through so navigation works.
+      if ((error as { digest?: string })?.digest) throw error;
       console.error(error);
       redirect(`${backHref}?error=failed`);
     }
@@ -135,7 +146,6 @@ export default async function EditResourcePage(props: {
 
   async function deleteResource() {
     "use server";
-    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.packageResource.delete({ where: { id: params.id } });
@@ -376,7 +386,20 @@ export default async function EditResourcePage(props: {
               <DeleteResourceButton resource={resource?.name || "this resource"} />
             </form>
           ) : <div />}
-          
+
+          {/* Multiple entries of the same type are first-class: one click
+              saves and reopens a fresh pre-filled create form. */}
+          {isNew && (
+            <button
+              type="submit"
+              name="then"
+              value="another"
+              className="admin-press inline-flex items-center gap-2 px-5 py-2.5 min-h-[44px] rounded-lg font-bold tracking-wider uppercase text-xs border border-white/10 bg-white/5 hover:bg-white/10 text-white transition-colors"
+            >
+              + Save &amp; Add Another
+            </button>
+          )}
+
           <SubmitResourceButton />
         </div>
       </div>

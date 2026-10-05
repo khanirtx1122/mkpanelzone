@@ -93,13 +93,24 @@ export default async function RootLayout({
   /* Footer WhatsApp link — resolved from the Admin-managed setting (with the
      legacy env fallback). Cached per request, so it costs nothing extra here. */
   let footerWhatsappHref: string | null = null;
+  let footerSocialLinks: { platform: string; url: string }[] = [];
   try {
     const { getWhatsAppNumber, getSettings, whatsappLink } = await import("@/lib/settings");
     const [num, s] = await Promise.all([
       getWhatsAppNumber(),
-      getSettings(["support_whatsapp_message"]),
+      getSettings(["support_whatsapp_message", "social_links"]),
     ]);
     footerWhatsappHref = whatsappLink(num, s.support_whatsapp_message?.trim() || undefined);
+    // Owner-managed social links (admin → Footer). Parsed defensively; a bad
+    // value must never break the whole site render.
+    try {
+      const parsed = JSON.parse((s.social_links as string) || "[]") as { platform: string; url: string; enabled: boolean }[];
+      footerSocialLinks = parsed
+        .filter((l) => l && l.enabled && typeof l.url === "string" && /^https?:\/\//i.test(l.url))
+        .map((l) => ({ platform: l.platform, url: l.url }));
+    } catch {
+      footerSocialLinks = [];
+    }
   } catch (error) {
     console.error("Failed to resolve WhatsApp support link:", error);
   }
@@ -272,7 +283,7 @@ export default async function RootLayout({
             <main className="flex-1">
               {children}
             </main>
-            <Footer whatsappHref={footerWhatsappHref} />
+            <Footer whatsappHref={footerWhatsappHref} socialLinks={footerSocialLinks} />
           </FreePanelProvider>
           <GlobalPopupProvider popups={activePopups} memberPopups={memberPopups} />
           {/* First-party, anonymous website analytics (owner-only dashboard). */}

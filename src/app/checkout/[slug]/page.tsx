@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { CheckoutForm } from "./CheckoutForm";
 import { productContent } from "@/lib/productContent";
+import { effectivePrice, getGlobalOffer } from "@/lib/pricing";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -14,11 +15,17 @@ export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage({ params }: Props) {
   const resolvedParams = await params;
-  const product = await prisma.product.findUnique({
-    where: { slug: resolvedParams.slug, active: true },
-  });
+  const [product, offer] = await Promise.all([
+    prisma.product.findUnique({
+      where: { slug: resolvedParams.slug, active: true },
+    }),
+    getGlobalOffer(),
+  ]);
 
   if (!product) notFound();
+
+  // Single source of truth for pricing (product sale > global offer > list).
+  const priced = effectivePrice(product, offer);
 
   const paymentMethods = await prisma.paymentMethod.findMany({
     where: { active: true },
@@ -43,8 +50,13 @@ export default async function CheckoutPage({ params }: Props) {
         <p className="text-brand-ink-3 text-[15px] sm:text-[17px] max-w-xl mx-auto">
           You are purchasing{" "}
           <strong className="text-foreground">{product.name}</strong> for{" "}
-          <strong className="text-foreground tabular-nums">PKR {product.price.toFixed(2)}</strong>
+          <strong className="text-foreground tabular-nums">PKR {priced.price.toFixed(2)}</strong>
         </p>
+        {priced.source && (
+          <p className="text-xs font-bold uppercase tracking-widest text-green-400 mt-2">
+            {priced.percentOff}% off applied
+          </p>
+        )}
       </div>
 
       {/* Compact order summary */}
@@ -68,7 +80,14 @@ export default async function CheckoutPage({ params }: Props) {
         <div className="text-right shrink-0">
           <p className="text-[11px] font-bold tracking-widest uppercase text-brand-ink-3 mb-1">Total</p>
           <p className="text-base sm:text-lg font-extrabold text-foreground tabular-nums">
-            PKR {product.price.toFixed(0)}
+            {priced.source ? (
+              <>
+                <span className="line-through text-brand-ink-3 mr-2">PKR {priced.originalPrice.toFixed(0)}</span>
+                <span className="text-green-400">PKR {priced.price.toFixed(0)}</span>
+              </>
+            ) : (
+              <>PKR {priced.price.toFixed(0)}</>
+            )}
           </p>
         </div>
       </GlassCard>
@@ -90,7 +109,7 @@ export default async function CheckoutPage({ params }: Props) {
           ) : (
             <p className="text-sm text-brand-ink-3 mb-4 leading-relaxed">
               Send exactly{" "}
-              <strong className="text-foreground tabular-nums">PKR {product.price.toFixed(2)}</strong>{" "}
+              <strong className="text-foreground tabular-nums">PKR {priced.price.toFixed(2)}</strong>{" "}
               using any method below, then select it on the right and upload your screenshot.
             </p>
           )}
@@ -128,7 +147,7 @@ export default async function CheckoutPage({ params }: Props) {
           <GlassCard className="border-brand-blue-500/30 shadow-[0_0_30px_rgba(47,95,208,0.15)] bg-surface-glass">
             <CheckoutForm
               productId={product.id}
-              planPrice={product.price}
+              planPrice={priced.price}
               paymentMethods={paymentMethods.map((pm) => ({ id: pm.id, name: pm.name }))}
             />
           </GlassCard>

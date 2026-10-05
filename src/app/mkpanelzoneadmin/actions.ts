@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { FREE_PANEL_SETTING_KEY, sanitizeUrl } from "@/lib/freePanel";
 import { isValidBranchSlug } from "@/lib/branches";
 import { requireOwner } from "@/lib/owner";
@@ -18,13 +17,6 @@ import { requireOwner } from "@/lib/owner";
  */
 async function ensureOwner() {
   return requireOwner();
-}
-
-export async function ownerLogout() {
-  const { redirect } = await import("next/navigation");
-  const cookieStore = await cookies();
-  cookieStore.delete("owner_session");
-  redirect("/");
 }
 
 // ----------------------------------------------------------------------
@@ -381,9 +373,17 @@ export async function adminCreateAgent(prevState: any, formData: FormData) {
 
   const username = formData.get("username") as string;
   const password = formData.get("password") as string;
+  const phone = ((formData.get("phone") as string) || "").replace(/[^\d]/g, "").slice(0, 15);
+  const planKey = (formData.get("subscriptionPlan") as string) || "";
 
   if (!username || !password || username.length < 3 || password.length < 6) {
     return { success: false, error: "Invalid username or password length." };
+  }
+
+  const { findResellerPlan } = await import("@/lib/pricing");
+  const plan = findResellerPlan(planKey);
+  if (planKey && !plan) {
+    return { success: false, error: "Unknown subscription plan." };
   }
 
   const existing = await prisma.agent.findUnique({ where: { username } });
@@ -394,12 +394,17 @@ export async function adminCreateAgent(prevState: any, formData: FormData) {
   const argon2 = await import("argon2");
   const passwordHash = await argon2.hash(password);
 
+  const now = new Date();
   await prisma.agent.create({
     data: {
       username,
       passwordHash,
       role: "AGENT",
-      status: "ACTIVE"
+      status: "ACTIVE",
+      phone: phone || null,
+      subscriptionPlan: plan?.key ?? null,
+      subscriptionStart: plan && plan.days !== null ? now : null,
+      subscriptionExpiry: plan && plan.days !== null ? new Date(now.getTime() + plan.days * 24 * 60 * 60 * 1000) : null,
     }
   });
 
@@ -806,5 +811,287 @@ export async function saveFreePanelConfig(formData: FormData): Promise<void> {
     revalidatePath("/");
   } catch (error) {
     console.error("saveFreePanelConfig failed:", error);
+  }
+}
+
+// ----------------------------------------------------------------------
+// GLOBAL OFFER / ALL-PRODUCTS SALE
+// ----------------------------------------------------------------------
+
+/** Saves the site-wide offer. Pricing priority lives in lib/pricing.ts:
+    an active product sale always wins; the global offer applies only to
+    products without one — discounts are never stacked. */
+export async function saveGlobalOffer(formData: FormData): Promise<void> {
+  try {
+    const enabled = formData.get("enabled") === "on";
+    const title = ((formData.get("title") as string) || "").trim().slice(0, 120);
+    const message = ((formData.get("message") as string) || "").trim().slice(0, 300);
+    const discountPercent = Math.min(
+      Math.max(Math.round(parseFloat((formData.get("discountPercent") as string) || "0") || 0), 0),
+      95,
+    );
+    const startsRaw = (formData.get("startsAt") as string) || "";
+    const endsRaw = (formData.get("endsAt") as string) || "";
+
+    const value = JSON.stringify({
+      enabled,
+      title,
+      message,
+      discountPercent,
+      startsAt: startsRaw ? new Date(startsRaw).toISOString() : null,
+      endsAt: endsRaw ? new Date(endsRaw).toISOString() : null,
+    });
+
+    await prisma.siteSetting.upsert({
+      where: { key: "global_offer" },
+      update: { value },
+      create: { key: "global_offer", value },
+    });
+    revalidatePath("/mkpanelzoneadmin/settings");
+    revalidatePath("/products");
+    revalidatePath("/");
+  } catch (error) {
+    console.error("[saveGlobalOffer]", error);
+  }
+}
+
+// ----------------------------------------------------------------------
+// CUSTOMER VALIDITY + DELETE
+// ----------------------------------------------------------------------
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Increases/decreases a customer's access expiry. Days may be negative.
+    An expiry that lands in the past is stored as-is — the row then reads
+    as expired instead of silently extending access. */
+export async function adminAdjustCustomerExpiry(id: string, days: number) {
+  try {
+    const customer = await prisma.customer.findUnique({
+      where: { id },
+      select: { expiresAt: true },
+    });
+    if (!customer) return { error: "Customer not found." };
+
+    const base = customer.expiresAt && customer.expiresAt.getTime() > Date.now()
+      ? customer.expiresAt.getTime()
+      : Date.now();
+    const next = new Date(base + Math.round(days) * DAY_MS);
+
+    await prisma.customer.update({ where: { id }, data: { expiresAt: next } });
+    revalidatePath("/mkpanelzoneadmin/customers");
+    revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
+    return { success: true, expiresAt: next.toISOString() };
+  } catch (error) {
+    console.error("[adminAdjustCustomerExpiry]", error);
+    return { error: "Failed to update validity." };
+  }
+}
+
+/** Sets an exact expiry. Empty string clears it (no expiry). */
+export async function adminSetCustomerExpiry(id: string, isoDate: string) {
+  try {
+    const expiresAt = isoDate.trim() ? new Date(isoDate) : null;
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+      return { error: "Invalid date." };
+    }
+    await prisma.customer.update({ where: { id }, data: { expiresAt } });
+    revalidatePath("/mkpanelzoneadmin/customers");
+    revalidatePath(`/mkpanelzoneadmin/customers/${id}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[adminSetCustomerExpiry]", error);
+    return { error: "Failed to set expiry." };
+  }
+}
+
+/** REAL customer deletion. Devices cascade via the FK; proof references live
+    on this row and the storage object is removed best-effort afterwards. */
+export async function adminDeleteCustomer(id: string) {
+  try {
+    const customer = await prisma.customer.findUnique({
+      where: { id },
+      select: { agentPaymentProof: true },
+    });
+    if (!customer) return { error: "Customer not found." };
+
+    await prisma.customer.delete({ where: { id } });
+
+    // Best-effort storage cleanup — a storage policy failure must not
+    // surface as a failed deletion when the row is already gone.
+    if (customer.agentPaymentProof) {
+      const { deleteProofObject } = await import("@/lib/proofStorage");
+      await deleteProofObject(customer.agentPaymentProof);
+    }
+
+    revalidatePath("/mkpanelzoneadmin/customers");
+    return { success: true };
+  } catch (error) {
+    console.error("[adminDeleteCustomer]", error);
+    return { error: "Failed to delete customer." };
+  }
+}
+
+// ----------------------------------------------------------------------
+// RESELLER SUBSCRIPTIONS + DELETE
+// ----------------------------------------------------------------------
+
+/** Sets (or clears) a reseller's subscription. PERMANENT stores a plan key
+    with a null expiry — never a fake countdown. */
+export async function adminSetAgentSubscription(
+  id: string,
+  planKey: string,
+  phone: string,
+) {
+  try {
+    const { findResellerPlan } = await import("@/lib/pricing");
+    const plan = findResellerPlan(planKey);
+    if (!plan) return { error: "Unknown subscription plan." };
+
+    const now = new Date();
+    const data = {
+      phone: phone.trim() || null,
+      subscriptionPlan: plan.key,
+      subscriptionStart: plan.days === null ? null : now,
+      subscriptionExpiry:
+        plan.days === null ? null : new Date(now.getTime() + plan.days * DAY_MS),
+    };
+
+    await prisma.agent.update({ where: { id }, data });
+    revalidatePath("/mkpanelzoneadmin/agents");
+    revalidatePath(`/mkpanelzoneadmin/agents/${id}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[adminSetAgentSubscription]", error);
+    return { error: "Failed to update subscription." };
+  }
+}
+
+/** Deletes a reseller after detaching their customers (createdByAgentId is
+    optional, so rows are preserved and simply become owner-less). */
+export async function adminDeleteAgent(id: string) {
+  try {
+    const agent = await prisma.agent.findUnique({ where: { id }, select: { role: true } });
+    if (!agent) return { error: "Account not found." };
+    if (agent.role === "OWNER") return { error: "The owner account cannot be deleted." };
+
+    await prisma.$transaction([
+      prisma.customer.updateMany({
+        where: { createdByAgentId: id },
+        data: { createdByAgentId: null },
+      }),
+      prisma.agent.delete({ where: { id } }),
+    ]);
+
+    revalidatePath("/mkpanelzoneadmin/agents");
+    return { success: true };
+  } catch (error) {
+    console.error("[adminDeleteAgent]", error);
+    return { error: "Failed to delete reseller." };
+  }
+}
+
+// ----------------------------------------------------------------------
+// PAYMENT PROOF STORAGE MANAGER
+// ----------------------------------------------------------------------
+
+export async function adminDeleteProofs(
+  refs: { source: "order" | "customer"; id: string; path: string }[],
+): Promise<{ deleted: number; failed: number }> {
+  const { deleteProofObject } = await import("@/lib/proofStorage");
+  let deleted = 0;
+  let failed = 0;
+
+  for (const ref of refs) {
+    try {
+      // Only clear the DB reference when the storage object is actually gone,
+      // so the manager never claims success while the file still exists.
+      if (!(await deleteProofObject(ref.path))) {
+        failed++;
+        continue;
+      }
+      if (ref.source === "order") {
+        await prisma.order.update({ where: { id: ref.id }, data: { paymentProofPath: null } });
+      } else {
+        await prisma.customer.update({ where: { id: ref.id }, data: { agentPaymentProof: null } });
+      }
+      deleted++;
+    } catch (error) {
+      console.error("[adminDeleteProofs] item failed:", ref.id, error);
+      failed++;
+    }
+  }
+
+  revalidatePath("/mkpanelzoneadmin/proofs");
+  revalidatePath("/mkpanelzoneadmin/orders");
+  revalidatePath("/mkpanelzoneadmin/customers");
+  return { deleted, failed };
+}
+
+// ----------------------------------------------------------------------
+// WHATSAPP ASSISTANTS + SOCIAL LINKS (JSON settings)
+// ----------------------------------------------------------------------
+
+export type WhatsAppAssistant = { name: string; number: string; enabled: boolean };
+
+/** Saves the assistant list. Numbers are normalized to digits-only here so a
+    bad paste can never produce a broken wa.me link on the public site. */
+export async function saveWhatsAppAssistants(assistants: WhatsAppAssistant[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleaned = assistants
+      .slice(0, 20)
+      .map((a) => ({
+        name: (a.name || "").trim().slice(0, 60),
+        number: (a.number || "").replace(/[^\d]/g, "").slice(0, 15),
+        enabled: a.enabled === true,
+      }))
+      .filter((a) => a.name && a.number);
+
+    await prisma.siteSetting.upsert({
+      where: { key: "support_whatsapp_assistants" },
+      update: { value: JSON.stringify(cleaned) },
+      create: { key: "support_whatsapp_assistants", value: JSON.stringify(cleaned) },
+    });
+    revalidatePath("/mkpanelzoneadmin/support");
+    revalidatePath("/support");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("[saveWhatsAppAssistants]", error);
+    return { success: false, error: "Failed to save assistants." };
+  }
+}
+
+export type SocialLink = { platform: string; url: string; enabled: boolean };
+
+const KNOWN_SOCIAL = ["whatsapp", "discord", "tiktok", "facebook", "instagram", "youtube", "x", "telegram"];
+
+/** Saves footer/social links. URLs are validated to https(s) so a stored
+    link can never become a javascript: payload for visitors. */
+export async function saveSocialLinks(links: SocialLink[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleaned = links
+      .slice(0, 20)
+      .map((l) => ({ platform: (l.platform || "").toLowerCase().trim(), url: (l.url || "").trim(), enabled: l.enabled === true }))
+      .filter((l) => l.platform && KNOWN_SOCIAL.includes(l.platform))
+      .filter((l) => {
+        try {
+          const u = new URL(l.url);
+          return u.protocol === "https:" || u.protocol === "http:";
+        } catch {
+          return false;
+        }
+      });
+
+    await prisma.siteSetting.upsert({
+      where: { key: "social_links" },
+      update: { value: JSON.stringify(cleaned) },
+      create: { key: "social_links", value: JSON.stringify(cleaned) },
+    });
+    revalidatePath("/mkpanelzoneadmin/footer");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("[saveSocialLinks]", error);
+    return { success: false, error: "Failed to save social links." };
   }
 }

@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { requireOwner } from "@/lib/owner";
 
 export default async function EditAnnouncementPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -19,7 +18,6 @@ export default async function EditAnnouncementPage(props: { params: Promise<{ id
 
   async function saveAnnouncement(formData: FormData) {
     "use server";
-    if (!(await requireOwner())) redirect("/");
 
     const title = formData.get("title") as string;
     const message = formData.get("message") as string;
@@ -56,7 +54,6 @@ export default async function EditAnnouncementPage(props: { params: Promise<{ id
 
   async function deleteAnnouncement() {
     "use server";
-    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.announcement.delete({ where: { id: params.id } });

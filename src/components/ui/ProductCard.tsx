@@ -22,6 +22,8 @@ export interface Product {
   price: number;
   slug: string;
   coverImageUrl?: string | null;
+  /** Undiscounted list price — set by the server when a sale/offer applies. */
+  originalPrice?: number | null;
 }
 
 function getProductMeta(slug: string, index: number) {
@@ -246,9 +248,14 @@ export function ProductCard({
                   <span className="text-[10px] font-bold text-brand-ink-3 uppercase tracking-[0.1em] self-center pt-px">
                     PKR
                   </span>
+                  {product.originalPrice != null && product.originalPrice > product.price && (
+                    <span className="text-[11px] font-bold text-brand-ink-3 line-through tabular-nums">
+                      {product.originalPrice.toFixed(0)}
+                    </span>
+                  )}
                   <span
                     className="tabular-nums font-extrabold text-foreground tracking-tight leading-none truncate"
-                    style={{ fontSize: "clamp(17px,4.8vw,22px)" }}
+                    style={{ fontSize: "clamp(17px,4.8vw,22px)", ...(product.originalPrice != null && product.originalPrice > product.price ? { color: "#4ADE80" } : {}) }}
                   >
                     {product.price.toFixed(0)}
                   </span>

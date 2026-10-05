@@ -62,14 +62,6 @@ function storageBase(): string {
   return url.replace(/\/+$/, "");
 }
 
-/**
- * Owner-only delivery URL. Admin pages never embed a raw storage object URL;
- * the handler validates the owner session before streaming this object.
- */
-function adminProofUrl(objectPath: string): string {
-  return `/api/mkpanelzoneadmin/proof?path=${encodeURIComponent(objectPath)}`;
-}
-
 /** Human-safe, collision-free object name derived from the upload. */
 function buildObjectName(originalName: string, ext: string, scope: string): string {
   const safeScope = scope.replace(/[^a-z0-9-]/gi, "").slice(0, 24) || "proof";
@@ -158,10 +150,8 @@ export type ProofRef = {
   folder: string;
   /** Original filename inside the folder. */
   fileName: string;
-  /** Owner-authenticated URL used by admin previews and downloads. */
+  /** A usable absolute URL for a browser. */
   url: string;
-  /** Direct storage URL used only for server-side existence probing. */
-  storageUrl: string;
   /** False for formats a browser cannot render inline (HEIC/PDF). */
   inlineVisible: boolean;
 };
@@ -193,29 +183,27 @@ export function resolveProof(raw: string | null | undefined): ProofRef | null {
   if (!value) return null;
 
   let objectPath = "";
-  let storageUrl = "";
+  let url = "";
 
   if (/^https?:\/\//i.test(value)) {
     const derived = objectPathFromUrl(value);
     if (derived) {
       objectPath = derived;
-      storageUrl = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
+      url = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
     } else {
-      // Foreign legacy links cannot be safely streamed through our storage
-      // handler; retain the existing display behavior only for those rows.
+      // Foreign host (old CDN, Google Drive, …) — display it as-is.
       return {
         raw: value,
         objectPath: "",
         folder: "",
         fileName: "",
         url: value,
-        storageUrl: value,
         inlineVisible: true,
       };
     }
   } else {
     objectPath = value.replace(/^\/+/, "");
-    storageUrl = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
+    url = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
   }
 
   const parts = objectPath.split("/");
@@ -228,8 +216,7 @@ export function resolveProof(raw: string | null | undefined): ProofRef | null {
     objectPath,
     folder,
     fileName,
-    url: adminProofUrl(objectPath),
-    storageUrl,
+    url,
     inlineVisible: INLINE_BY_EXT[ext] ?? true,
   };
 }
@@ -295,6 +282,6 @@ export async function resolveProofWithExistence(
   if (!ref) return null;
   if (!ref.objectPath) return { ...ref, exists: true };
 
-  const exists = await objectExistsAt(ref.storageUrl);
+  const exists = await objectExistsAt(ref.url);
   return { ...ref, exists };
 }

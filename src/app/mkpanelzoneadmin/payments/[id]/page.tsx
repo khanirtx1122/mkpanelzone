@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import { requireOwner } from "@/lib/owner";
 
 export default async function EditPaymentMethodPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -19,7 +18,6 @@ export default async function EditPaymentMethodPage(props: { params: Promise<{ i
 
   async function saveMethod(formData: FormData) {
     "use server";
-    if (!(await requireOwner())) redirect("/");
 
     const name = formData.get("name") as string;
     const accountDetails = formData.get("accountDetails") as string;
@@ -46,7 +44,6 @@ export default async function EditPaymentMethodPage(props: { params: Promise<{ i
 
   async function deleteMethod() {
     "use server";
-    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.paymentMethod.delete({ where: { id: params.id } });
