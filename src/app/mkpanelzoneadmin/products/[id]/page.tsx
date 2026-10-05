@@ -5,6 +5,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { AdminImageUploader } from "@/components/ui/AdminImageUploader";
 import { AdminVideoUploader } from "@/components/ui/AdminVideoUploader";
+import { requireOwner } from "@/lib/owner";
 
 export default async function EditProductPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -20,8 +21,8 @@ export default async function EditProductPage(props: { params: Promise<{ id: str
 
   async function saveProduct(formData: FormData) {
     "use server";
-    
-    // Bypass owner check for UI testing as requested
+    if (!(await requireOwner())) redirect("/");
+
     const name = formData.get("name") as string;
     const slug = formData.get("slug") as string;
     const description = formData.get("description") as string;
@@ -52,6 +53,7 @@ export default async function EditProductPage(props: { params: Promise<{ id: str
 
   async function deleteProduct() {
     "use server";
+    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.product.delete({ where: { id: params.id } });

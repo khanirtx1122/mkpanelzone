@@ -5,6 +5,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { AdminImageUploader } from "@/components/ui/AdminImageUploader";
 import { AdminVideoUploader } from "@/components/ui/AdminVideoUploader";
+import { requireOwner } from "@/lib/owner";
 
 export default async function ProductMediaDetailsPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -17,7 +18,8 @@ export default async function ProductMediaDetailsPage(props: { params: Promise<{
 
   async function saveMedia(formData: FormData) {
     "use server";
-    
+    if (!(await requireOwner())) redirect("/");
+
     const coverImageUrl = formData.get("coverImageUrl") as string;
     const demoVideoUrl = formData.get("demoVideoUrl") as string;
     const demoVideoType = formData.get("demoVideoType") as string;

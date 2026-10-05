@@ -2,6 +2,7 @@ import { getSettings } from "@/lib/settings";
 import { getHeroCta } from "@/lib/freePanel";
 import { Save, Settings2, Sparkles } from "lucide-react";
 import { saveSettings } from "../actions";
+import { AdminSubmitButton } from "@/components/admin/AdminButton";
 
 export default async function GeneralSettingsPage() {
   const settings = await getSettings([
@@ -92,7 +93,7 @@ export default async function GeneralSettingsPage() {
               <Sparkles className="text-brand-blue-400" size={18} /> Hero Top CTA
             </h2>
             <p className="text-xs text-brand-ink-3 font-mono">
-              The compact chip above the homepage headline. Disabled = static "Premium Digital Platform" badge.
+              The compact chip above the homepage headline. Disabled uses the static Premium Digital Platform badge.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
@@ -140,12 +141,9 @@ export default async function GeneralSettingsPage() {
           </div>
 
           <div className="pt-6 border-t border-white/5 flex items-center justify-end">
-            <button 
-              type="submit" 
-              className="inline-flex items-center gap-2 px-6 py-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-colors"
-            >
-              <Save size={16} /> Save Settings
-            </button>
+            <AdminSubmitButton label="Save Settings" pendingLabel="Saving…" successLabel="Saved ✓">
+              <Save size={16} />
+            </AdminSubmitButton>
           </div>
         </form>
       </div>

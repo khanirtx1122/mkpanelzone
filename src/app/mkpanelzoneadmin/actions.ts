@@ -579,18 +579,22 @@ export async function saveSettings(formData: FormData) {
   if (!owner) return { error: "Unauthorized" };
 
   try {
-    const keys = Array.from(formData.keys()).filter(k => k.startsWith("setting_"));
-    
-    for (const key of keys) {
-      const settingKey = key.replace("setting_", "");
-      const value = formData.get(key) as string;
+    const keys = Array.from(new Set(Array.from(formData.keys()).filter((key) => key.startsWith("setting_"))));
 
-      await prisma.siteSetting.upsert({
-        where: { key: settingKey },
-        update: { value },
-        create: { key: settingKey, value }
-      });
-    }
+    /* Settings forms often submit several independent values. One transaction
+       replaces a sequential request waterfall, keeps related changes atomic,
+       and ensures the owner gets a single definitive success/failure result. */
+    await prisma.$transaction(
+      keys.map((key) => {
+        const settingKey = key.replace("setting_", "");
+        const value = String(formData.get(key) ?? "");
+        return prisma.siteSetting.upsert({
+          where: { key: settingKey },
+          update: { value },
+          create: { key: settingKey, value },
+        });
+      }),
+    );
 
     // Hero Top CTA — sanitize the link server-side (internal or https:// only).
     if (formData.has("hero_cta_enabled")) {

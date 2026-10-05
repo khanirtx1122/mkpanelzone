@@ -1,6 +1,7 @@
 import { getSettings } from "@/lib/settings";
 import { Save, LifeBuoy, MessageCircle } from "lucide-react";
 import { saveSettings } from "../actions";
+import { AdminSubmitButton } from "@/components/admin/AdminButton";
 
 export default async function SupportSettingsPage() {
   const settings = await getSettings([
@@ -111,12 +112,9 @@ export default async function SupportSettingsPage() {
           </div>
 
           <div className="pt-6 border-t border-white/5 flex items-center justify-end">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-6 py-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-lg font-bold tracking-wider uppercase text-xs transition-colors"
-            >
-              <Save size={16} /> Save Support Settings
-            </button>
+            <AdminSubmitButton label="Save Support Settings" pendingLabel="Saving…" successLabel="Saved ✓">
+              <Save size={16} />
+            </AdminSubmitButton>
           </div>
         </form>
       </div>

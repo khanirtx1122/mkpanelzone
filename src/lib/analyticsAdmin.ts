@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { PRESENCE_WINDOW_MS, describePath, sectionLabel, clickLabel } from "@/lib/analytics";
 
@@ -91,9 +92,16 @@ function emptySnapshot(degraded = false): AnalyticsSnapshot {
  * Analytics must never be able to break the admin Overview: a failed query
  * degrades to a zeroed snapshot instead of throwing.
  */
+const cachedSnapshot = unstable_cache(computeSnapshot, ["admin-analytics-snapshot"], {
+  revalidate: 15,
+});
+
 export async function getAnalyticsSnapshot(): Promise<AnalyticsSnapshot> {
   try {
-    return await computeSnapshot();
+    // A short shared cache prevents concurrent dashboard mounts and polling
+    // from re-running every aggregate. The dashboard remains near-real-time
+    // while its expensive work no longer delays unrelated admin actions.
+    return await cachedSnapshot();
   } catch (error) {
     console.error("[analytics] snapshot failed, showing zeros:", error);
     return emptySnapshot(true);
@@ -125,7 +133,6 @@ async function computeSnapshot(): Promise<AnalyticsSnapshot> {
     sectionRows,
     liveSessions,
     recentEvents,
-    recentCount,
     firstVisitor,
   ] = await Promise.all([
     prisma.analyticsSession.count({ where: { lastSeenAt: { gte: presenceSince }, isBot: false } }),
@@ -213,7 +220,6 @@ async function computeSnapshot(): Promise<AnalyticsSnapshot> {
         session: { select: { deviceName: true, deviceCategory: true, browserName: true, osName: true } },
       },
     }),
-    prisma.analyticsEvent.count(),
     prisma.analyticsVisitor.findFirst({ orderBy: { firstSeenAt: "asc" }, select: { firstSeenAt: true } }),
   ]);
 
@@ -229,7 +235,7 @@ async function computeSnapshot(): Promise<AnalyticsSnapshot> {
 
   return {
     generatedAt: now.toISOString(),
-    hasData: lifetimeVisitors > 0 || lifetimeSessions > 0 || recentCount > 0,
+    hasData: lifetimeVisitors > 0 || lifetimeSessions > 0 || lifetimePageViews > 0,
     degraded: false,
     trackingSince: firstVisitor?.firstSeenAt.toISOString() ?? null,
     stats: {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { DeleteResourceButton } from "../DeleteResourceButton";
 import { listAllPlatforms, findPlatformByCode } from "@/lib/platforms";
+import { requireOwner } from "@/lib/owner";
 
 export default async function EditResourcePage(props: { 
   params: Promise<{ id: string }>,
@@ -54,6 +55,7 @@ export default async function EditResourcePage(props: {
 
   async function saveResource(formData: FormData) {
     "use server";
+    if (!(await requireOwner())) redirect("/");
 
     const name = ((formData.get("name") as string) || "").trim();
     const type = ((formData.get("type") as string) || "LINK").toUpperCase();
@@ -133,6 +135,7 @@ export default async function EditResourcePage(props: {
 
   async function deleteResource() {
     "use server";
+    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.packageResource.delete({ where: { id: params.id } });

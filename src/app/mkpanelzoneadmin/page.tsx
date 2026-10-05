@@ -1,6 +1,7 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Users, UserPlus } from "lucide-react";
+import { Users, UserPlus, ShoppingBag } from "lucide-react";
 import { getAnalyticsSnapshot } from "@/lib/analyticsAdmin";
 import { AnalyticsOverview } from "@/components/admin/AnalyticsOverview";
 import { listAllPlatforms } from "@/lib/platforms";
@@ -12,10 +13,27 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
+async function DashboardAnalytics() {
+  const analytics = await getAnalyticsSnapshot();
+  return <AnalyticsOverview initial={analytics} />;
+}
+
+function AnalyticsFallback() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 animate-pulse">
+      <div className="h-4 w-40 rounded bg-white/10" />
+      <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-28 rounded-xl bg-white/[0.05]" />)}
+      </div>
+    </div>
+  );
+}
+
 export default async function AdminDashboardPage() {
-  const [totalAgents, totalCustomers, customersByPlatform, platforms, analytics] = await Promise.all([
+  const [totalAgents, totalCustomers, pendingOrders, customersByPlatform, platforms] = await Promise.all([
     prisma.agent.count({ where: { role: "AGENT" } }),
     prisma.customer.count(),
+    prisma.order.count({ where: { status: "pending" } }),
     prisma.customer.groupBy({
       by: ['platformType'],
       _count: {
@@ -23,8 +41,6 @@ export default async function AdminDashboardPage() {
       }
     }),
     listAllPlatforms(),
-    // Real recorded traffic only — the dashboard renders zeros when empty.
-    getAnalyticsSnapshot(),
   ]);
 
   return (
@@ -34,7 +50,7 @@ export default async function AdminDashboardPage() {
         <p className="text-brand-ink-3">Platform metrics and system status.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link 
           href="/mkpanelzoneadmin/agents"
           className="block p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-brand-blue-500/50 hover:bg-white/10 hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 group relative overflow-hidden shadow-[0_0_0_rgba(0,0,0,0)] hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]"
@@ -57,6 +73,18 @@ export default async function AdminDashboardPage() {
           </div>
           <p className="text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-1">Total Customers</p>
           <p className="text-5xl font-black text-white">{totalCustomers}</p>
+        </Link>
+
+        <Link
+          href="/mkpanelzoneadmin/orders?status=PENDING"
+          className="block p-6 rounded-2xl bg-amber-500/[0.05] border border-amber-500/20 hover:border-amber-400/60 hover:bg-amber-500/[0.09] hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 group relative overflow-hidden"
+        >
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-6">
+            <ShoppingBag size={24} />
+          </div>
+          <p className="text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-1">Unreviewed Orders</p>
+          <p className="text-5xl font-black text-white tabular-nums">{pendingOrders}</p>
+          <p className="mt-2 text-xs font-bold uppercase tracking-wider text-amber-400">Review pending payments</p>
         </Link>
       </div>
 
@@ -82,9 +110,12 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* WEBSITE ANALYTICS — real first-party traffic only. */}
+      {/* Website analytics streams after operational admin data. Slow secondary
+          aggregates never block order/customer navigation or dashboard paint. */}
       <div className="border-t border-white/5 pt-10">
-        <AnalyticsOverview initial={analytics} />
+        <Suspense fallback={<AnalyticsFallback />}>
+          <DashboardAnalytics />
+        </Suspense>
       </div>
     </div>
   );

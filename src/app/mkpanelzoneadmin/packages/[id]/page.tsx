@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { listAllPlatforms, findPlatformByCode } from "@/lib/platforms";
+import { requireOwner } from "@/lib/owner";
 
 export default async function EditPackagePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -21,7 +22,8 @@ export default async function EditPackagePage(props: { params: Promise<{ id: str
 
   async function savePackage(formData: FormData) {
     "use server";
-    
+    if (!(await requireOwner())) redirect("/");
+
     const name = formData.get("name") as string;
     const description = formData.get("description") as string;
     const platformType = formData.get("platformType") as string;
@@ -63,6 +65,7 @@ export default async function EditPackagePage(props: { params: Promise<{ id: str
 
   async function deletePackage() {
     "use server";
+    if (!(await requireOwner())) redirect("/");
     if (isNew) return;
     try {
       await prisma.package.delete({ where: { id: params.id } });

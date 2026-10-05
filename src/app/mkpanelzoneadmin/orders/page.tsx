@@ -1,7 +1,8 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Search, Eye, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
-import { resolveProofWithExistence, type ResolvedProof } from "@/lib/paymentProof";
+import { Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { resolveProof } from "@/lib/paymentProof";
 
 const PAGE_SIZE = 25;
 
@@ -13,7 +14,7 @@ export default async function OrdersPage(props: {
   const query = searchParams?.query || "";
   const page = Math.max(1, parseInt(searchParams?.page || "1", 10) || 1);
 
-  let whereClause: any = {};
+  const whereClause: Prisma.OrderWhereInput = {};
   if (statusFilter !== "ALL") {
     whereClause.status = statusFilter.toLowerCase();
   }
@@ -42,17 +43,11 @@ export default async function OrdersPage(props: {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  /* ── Proof availability ────────────────────────────────────────────────
-     Each row is priced as: thumbnail / view-link / no proof / missing file.
-     Existence is probed with a cheap HEAD request, in parallel, exactly for the
-     rows on this page — the browser never downloads a full-size screenshot
-     until the Owner opens one. */
-  const proofRefs = new Map<string, ResolvedProof | null>();
-  await Promise.all(
-    orders.map(async (order) => {
-      proofRefs.set(order.id, await resolveProofWithExistence(order.paymentProofPath));
-    })
-  );
+  /* List rendering deliberately does not probe Storage once per row. Those
+     network calls created a 25-request waterfall on every pagination/filter
+     click. Presence comes from the stored path; definitive availability is
+     checked only when the owner opens the order detail. */
+  const proofRefs = new Map(orders.map((order) => [order.id, resolveProof(order.paymentProofPath)]));
 
   const buildPageUrl = (p: number) => {
     const params = new URLSearchParams();
@@ -153,29 +148,15 @@ export default async function OrdersPage(props: {
                         <span className="text-[11px] font-mono text-brand-ink-3 whitespace-nowrap">
                           No payment proof
                         </span>
-                      ) : !proofRefs.get(order.id)!.exists ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-400 whitespace-nowrap">
-                          <ImageOff size={13} /> File missing
-                        </span>
                       ) : (
                         <Link
                           href={`/mkpanelzoneadmin/orders/${order.id}`}
                           className="inline-flex items-center gap-2 group/proof"
                           title="Open payment proof"
                         >
-                          {proofRefs.get(order.id)!.inlineVisible ? (
-                            <img
-                              src={proofRefs.get(order.id)!.url}
-                              alt={`Payment proof ${order.orderNumber}`}
-                              loading="lazy"
-                              decoding="async"
-                              className="w-10 h-10 rounded object-cover border border-white/10 group-hover/proof:border-brand-blue-500/50 transition-colors"
-                            />
-                          ) : (
-                            <span className="w-10 h-10 rounded border border-white/10 flex items-center justify-center text-[9px] font-bold text-brand-ink-3">
-                              FILE
-                            </span>
-                          )}
+                          <span className="w-10 h-10 rounded border border-white/10 flex items-center justify-center text-[9px] font-bold text-brand-ink-3 group-hover/proof:border-brand-blue-500/50 transition-colors">
+                            {proofRefs.get(order.id)!.inlineVisible ? "IMG" : "FILE"}
+                          </span>
                           <span className="text-[11px] font-bold uppercase tracking-wider text-brand-blue-400 group-hover/proof:text-brand-blue-300 whitespace-nowrap">
                             View Proof
                           </span>

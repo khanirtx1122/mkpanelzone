@@ -62,6 +62,14 @@ function storageBase(): string {
   return url.replace(/\/+$/, "");
 }
 
+/**
+ * Owner-only delivery URL. Admin pages never embed a raw storage object URL;
+ * the handler validates the owner session before streaming this object.
+ */
+function adminProofUrl(objectPath: string): string {
+  return `/api/mkpanelzoneadmin/proof?path=${encodeURIComponent(objectPath)}`;
+}
+
 /** Human-safe, collision-free object name derived from the upload. */
 function buildObjectName(originalName: string, ext: string, scope: string): string {
   const safeScope = scope.replace(/[^a-z0-9-]/gi, "").slice(0, 24) || "proof";
@@ -125,21 +133,11 @@ export async function uploadPaymentProof(
       return { ok: false, error: "Upload failed. Please check your connection and try again." };
     }
 
-    /* Confirm the object really exists before the caller may report success.
-       IMPORTANT: this must NOT use storage.list() — the storage list API
-       requires a SELECT policy that the public key does not have, so it always
-       returns an empty array here and would reject every legitimate upload.
-       A ranged GET on the object's own URL is authoritative; see
-       objectExistsAt — Supabase reports a missing object as HTTP 400 with a
-       404-shaped body, so only that response counts as "not stored". */
-    const stored = await objectExistsAt(
-      `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`
-    );
-    if (stored === false) {
-      console.error("[uploadPaymentProof] stored object not reachable:", objectPath);
-      return { ok: false, error: "Upload could not be verified. Please try again." };
-    }
-
+    /* Supabase Storage only resolves this promise after it has accepted the
+       object. Do not make the customer wait for a second public HTTP request:
+       that was an avoidable round-trip (and a common source of false failures
+       behind restrictive storage policies). The Owner detail page performs a
+       definitive one-byte check only when it actually needs to inspect a proof. */
     return { ok: true, path: objectPath, inlineVisible: meta.inlineVisible, label: meta.label };
   } catch (error) {
     console.error("[uploadPaymentProof] unexpected:", error);
@@ -160,8 +158,10 @@ export type ProofRef = {
   folder: string;
   /** Original filename inside the folder. */
   fileName: string;
-  /** A usable absolute URL for a browser. */
+  /** Owner-authenticated URL used by admin previews and downloads. */
   url: string;
+  /** Direct storage URL used only for server-side existence probing. */
+  storageUrl: string;
   /** False for formats a browser cannot render inline (HEIC/PDF). */
   inlineVisible: boolean;
 };
@@ -193,27 +193,29 @@ export function resolveProof(raw: string | null | undefined): ProofRef | null {
   if (!value) return null;
 
   let objectPath = "";
-  let url = "";
+  let storageUrl = "";
 
   if (/^https?:\/\//i.test(value)) {
     const derived = objectPathFromUrl(value);
     if (derived) {
       objectPath = derived;
-      url = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
+      storageUrl = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
     } else {
-      // Foreign host (old CDN, Google Drive, …) — display it as-is.
+      // Foreign legacy links cannot be safely streamed through our storage
+      // handler; retain the existing display behavior only for those rows.
       return {
         raw: value,
         objectPath: "",
         folder: "",
         fileName: "",
         url: value,
+        storageUrl: value,
         inlineVisible: true,
       };
     }
   } else {
     objectPath = value.replace(/^\/+/, "");
-    url = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
+    storageUrl = `${storageBase()}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(objectPath)}`;
   }
 
   const parts = objectPath.split("/");
@@ -226,7 +228,8 @@ export function resolveProof(raw: string | null | undefined): ProofRef | null {
     objectPath,
     folder,
     fileName,
-    url,
+    url: adminProofUrl(objectPath),
+    storageUrl,
     inlineVisible: INLINE_BY_EXT[ext] ?? true,
   };
 }
@@ -292,6 +295,6 @@ export async function resolveProofWithExistence(
   if (!ref) return null;
   if (!ref.objectPath) return { ...ref, exists: true };
 
-  const exists = await objectExistsAt(ref.url);
+  const exists = await objectExistsAt(ref.storageUrl);
   return { ...ref, exists };
 }
