@@ -10,8 +10,10 @@ import { compressProofImage } from "@/lib/compressProof";
 
 export function CreateCustomerForm({
   platforms,
+  branchesByPlatform = {},
 }: {
   platforms: { code: string; name: string }[];
+  branchesByPlatform?: Record<string, { id: string; name: string }[]>;
 }) {
   const [state, formAction, pending] = useActionState<any, FormData>(agentCreateCustomer, null);
   const router = useRouter();
@@ -40,7 +42,10 @@ export function CreateCustomerForm({
   }, [state, router]);
 
   const [platform, setPlatform] = useState(platforms[0]?.code ?? "ANDROID");
+  const [branchId, setBranchId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">("PAID");
+
+  const branches = branchesByPlatform[platform] ?? [];
 
   return (
     <form ref={formRef} action={formAction} className="space-y-5">
@@ -60,7 +65,10 @@ export function CreateCustomerForm({
           name="platformType" 
           required 
           value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
+          onChange={(e) => {
+            setPlatform(e.target.value);
+            setBranchId(""); // branches are platform-specific
+          }}
           className="w-full bg-foreground/5 border border-border-subtle rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-brand-blue-500/50 transition-colors"
         >
           {platforms.map((p) => (
@@ -69,6 +77,27 @@ export function CreateCustomerForm({
         </select>
         <p className="text-xs text-brand-ink-3">The default package for the selected platform will be automatically assigned.</p>
       </div>
+
+      {/* Branch — the reseller knows which branch the sale belongs to. */}
+      {branches.length > 0 && (
+        <div className="space-y-2">
+          <label className="block text-sm font-bold text-brand-ink-2 mb-1">Branch</label>
+          <select
+            name="branchId"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            className="w-full bg-foreground/5 border border-border-subtle rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-brand-blue-500/50 transition-colors"
+          >
+            <option value="">Default branch for this platform</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-brand-ink-3">
+            Choose the branch this customer belongs to, or leave it on default.
+          </p>
+        </div>
+      )}
 
       {/* Payment / access gate for the created customer. */}
       <div>

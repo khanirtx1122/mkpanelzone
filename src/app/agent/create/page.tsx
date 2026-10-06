@@ -1,6 +1,7 @@
 import { CreateCustomerForm } from "./CreateCustomerForm";
 import { UserPlus } from "lucide-react";
 import { listActivePlatforms } from "@/lib/platforms";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = {
   title: "Create Customer | Agent Panel",
@@ -8,6 +9,19 @@ export const metadata = {
 
 export default async function AgentCreateCustomerPage() {
   const platforms = await listActivePlatforms();
+
+  /* Branches for every enabled platform in ONE query, grouped client-side —
+     the reseller picks platform then branch with no extra round-trip. */
+  const branches = await prisma.platformBranch.findMany({
+    where: { platformType: { in: platforms.map((p) => p.code) }, isEnabled: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { id: true, platformType: true, name: true },
+  });
+
+  const branchesByPlatform: Record<string, { id: string; name: string }[]> = {};
+  for (const b of branches) {
+    (branchesByPlatform[b.platformType] ??= []).push({ id: b.id, name: b.name });
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -25,7 +39,10 @@ export default async function AgentCreateCustomerPage() {
             <h2 className="text-xl font-extrabold text-foreground tracking-tight">Customer Details</h2>
           </div>
           
-          <CreateCustomerForm platforms={platforms.map((p) => ({ code: p.code, name: p.name }))} />
+          <CreateCustomerForm
+            platforms={platforms.map((p) => ({ code: p.code, name: p.name }))}
+            branchesByPlatform={branchesByPlatform}
+          />
         </div>
       </div>
     </div>

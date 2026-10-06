@@ -202,7 +202,7 @@ export function ProductCard({
           </div>
 
           {/* ── CARD BODY ── */}
-          <div className="flex flex-col flex-1 p-4 sm:p-5">
+          <div className="flex flex-col flex-1 p-3 sm:p-4 lg:p-5">
             {/* Product name */}
             <h3 
               className="font-extrabold text-foreground tracking-tight leading-tight mb-1.5 line-clamp-2"
@@ -237,8 +237,10 @@ export function ProductCard({
             {/* Divider */}
             <div className="h-px w-full mb-3.5 mt-auto" style={{ background: "var(--border-subtle)" }} />
 
-            {/* ── PRICE + CTA ── */}
-            <div className="flex items-center justify-between gap-3 min-w-0">
+            {/* ── PRICE + CTA ──
+                Two-up on phones: the price sits above a full-width CTA so the
+                row never overflows at ~165px card width. */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 min-w-0">
               {/* Price */}
               <div className="flex flex-col min-w-0">
                 <span
@@ -269,7 +271,7 @@ export function ProductCard({
 
               {/* CTA */}
               <div
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[11px] text-[11px] sm:text-[12px] font-bold tracking-[0.05em] uppercase text-white border shrink-0 transition-transform duration-300 group-hover/card:scale-[1.03]"
+                className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-[11px] text-[11px] sm:text-[12px] font-bold tracking-[0.05em] uppercase text-white border shrink-0 w-full sm:w-auto transition-transform duration-300 group-hover/card:scale-[1.03]"
                 style={{
                   background: ctaGradient,
                   boxShadow: ctaShadow,

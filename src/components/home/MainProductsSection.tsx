@@ -124,7 +124,7 @@ export function MainProductsSection({ products }: { products: Product[] }) {
           Grid: 1 col on the narrowest phones, 2 from 380px, 3 from md.
           Each card carries its own scroll reveal so the grid cascades in.
         */}
-        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
           {products.map((product, idx) => (
             <Reveal key={product.id} delay={Math.min(idx, 5) * 60}>
               <CompactProductCard product={product} index={idx} />

@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { UserPlus, Calendar, Activity } from "lucide-react";
+import { UserPlus, Calendar, Activity, BadgeCheck, Clock } from "lucide-react";
+import { findResellerPlan, subscriptionRemaining } from "@/lib/pricing";
 
 export const metadata = {
   title: "Dashboard | Agent Panel",
@@ -40,12 +41,53 @@ export default async function AgentDashboardPage() {
 
   if (!agent) return null;
 
+  /* Subscription state is resolved from the DB row (authoritative) — the plan
+     label and remaining time are derived, never stored as display text.
+     A permanent plan reports "no expiry" instead of a fake countdown. */
+  const plan = findResellerPlan(agent.subscriptionPlan);
+  const remaining = subscriptionRemaining(agent.subscriptionExpiry);
+  const expired = agent.subscriptionExpiry ? new Date(agent.subscriptionExpiry).getTime() <= Date.now() : false;
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-10">
         <h1 className="text-3xl font-extrabold text-foreground tracking-tight uppercase mb-2">Overview</h1>
-        <p className="text-brand-ink-3">Your agent activity and recent customers.</p>
+        <p className="text-brand-ink-3">Your reseller activity, subscription and recent customers.</p>
       </div>
+
+      {/* ── SUBSCRIPTION ── */}
+      <GlassCard className="p-5 sm:p-6 border-border-subtle mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <span className="w-11 h-11 rounded-xl bg-brand-blue-500/10 border border-brand-blue-500/25 text-brand-blue-400 flex items-center justify-center shrink-0">
+              <BadgeCheck size={20} />
+            </span>
+            <div>
+              <p className="text-[11px] font-bold text-brand-ink-3 uppercase tracking-widest mb-0.5">Subscription Plan</p>
+              <p className="text-lg font-extrabold text-foreground">
+                {plan ? plan.label : "No active plan"}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className="text-[11px] font-bold text-brand-ink-3 uppercase tracking-widest mb-0.5">Remaining</p>
+            <p
+              className={`inline-flex items-center gap-1.5 text-sm font-extrabold ${
+                expired ? "text-red-400" : "text-green-400"
+              }`}
+            >
+              <Clock size={14} />
+              {remaining}
+            </p>
+            {agent.subscriptionExpiry && !expired && (
+              <p className="text-[11px] text-brand-ink-3 font-mono mt-0.5">
+                until {new Date(agent.subscriptionExpiry).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        </div>
+      </GlassCard>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <GlassCard className="p-6 border-border-subtle flex flex-col">
@@ -61,7 +103,7 @@ export default async function AgentDashboardPage() {
             <Activity size={20} />
           </div>
           <p className="text-sm font-bold text-brand-ink-3 uppercase tracking-widest mb-1">Account Status</p>
-          <p className="text-4xl font-extrabold text-foreground">ACTIVE</p>
+          <p className="text-4xl font-extrabold text-foreground">{agent.status}</p>
         </GlassCard>
       </div>
 

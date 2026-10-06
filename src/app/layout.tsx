@@ -158,8 +158,14 @@ export default async function RootLayout({
                * It cannot depend on React hydrating, on an animation library,
                * on requestAnimationFrame, or on transitionend/animationend —
                * those are exactly the things that used to leave the overlay
-               * covering the site on older iPhones. Whatever happens, the
-               * overlay is removed and the page becomes usable.
+               * covering the site on older iPhones.
+               *
+               * IMPORTANT (iPhone/Safari blank-screen fix): this function must
+               * NEVER removeChild() #mk-intro. That node is owned by React, and
+               * removing it behind React's back makes the later unmount throw
+               * NotFoundError on strict WebKit engines — which aborted the
+               * commit and left the page blank and stuck. We hide it instead;
+               * React removes it properly when it unmounts the overlay.
                * --------------------------------------------------------- */
               window.__mkReveal = function () {
                 try {
@@ -167,7 +173,13 @@ export default async function RootLayout({
                   el.setAttribute("data-intro", "off");
                   el.removeAttribute("data-intro-run");
                   var node = document.getElementById("mk-intro");
-                  if (node && node.parentNode) node.parentNode.removeChild(node);
+                  if (node) {
+                    node.style.display = "none";
+                    node.style.visibility = "hidden";
+                    node.style.pointerEvents = "none";
+                    node.style.opacity = "0";
+                    node.setAttribute("aria-hidden", "true");
+                  }
                   if (document.body) {
                     document.body.style.overflow = "";
                     document.body.style.position = "";
@@ -178,6 +190,23 @@ export default async function RootLayout({
               };
               /* Last resort: the sequence's own tail is ~4.3s. */
               window.__mkIntroCap = setTimeout(window.__mkReveal, 7000);
+
+              /* Extra belt-and-braces for slow devices: even if every timer in
+                 this page is throttled or suspended (backgrounded tab, frozen
+                 bfcache page), a paint-adjacent check still reveals the site. */
+              window.addEventListener("pageshow", function (e) {
+                if (e && e.persisted) { try { window.__mkReveal(); } catch (err) {} }
+              });
+              document.addEventListener("visibilitychange", function () {
+                try {
+                  if (document.visibilityState === "visible") {
+                    var n = document.getElementById("mk-intro");
+                    if (n && n.style.display !== "none" && !document.documentElement.getAttribute("data-intro-run")) {
+                      window.__mkReveal();
+                    }
+                  }
+                } catch (err) {}
+              });
 
               (function() {
                 try {

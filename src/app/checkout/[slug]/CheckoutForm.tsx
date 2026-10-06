@@ -24,6 +24,9 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
   const router = useRouter();
   
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [discord, setDiscord] = useState("");
   const [amount, setAmount] = useState("");
   const [methodId, setMethodId] = useState("");
@@ -47,6 +50,8 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
       try {
         const parsed = JSON.parse(saved);
         if (parsed.email) setEmail(parsed.email);
+        if (parsed.whatsapp) setWhatsapp(parsed.whatsapp);
+        if (parsed.username) setUsername(parsed.username);
         if (parsed.discord) setDiscord(parsed.discord);
         if (parsed.amount) setAmount(parsed.amount);
         if (parsed.methodId) setMethodId(parsed.methodId);
@@ -55,10 +60,10 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
   }, [productId]);
 
   useEffect(() => {
-    // Save draft on change
-    const draft = { email, discord, amount, methodId };
+    // Save draft on change (never persist the password)
+    const draft = { email, whatsapp, username, discord, amount, methodId };
     sessionStorage.setItem(`checkout_draft_${productId}`, JSON.stringify(draft));
-  }, [email, discord, amount, methodId, productId]);
+  }, [email, whatsapp, username, discord, amount, methodId, productId]);
 
   const parsedAmount = parseFloat(amount.replace(/,/g, ""));
   const isValidAmount = !isNaN(parsedAmount) && amount.trim() !== "";
@@ -70,6 +75,22 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
     const newErrors: { [key: string]: string } = {};
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       newErrors.email = "Please enter a valid email address.";
+    }
+
+    // WhatsApp is how the owner confirms the payment.
+    const waDigits = whatsapp.replace(/[^\d]/g, "");
+    if (!waDigits || waDigits.length < 7) {
+      newErrors.whatsapp = "Please enter your WhatsApp number (country code + number).";
+    }
+
+    // The customer picks their own access credentials.
+    if (!username || username.trim().length < 3) {
+      newErrors.username = "Choose a User ID with at least 3 characters.";
+    } else if (!/^[a-zA-Z0-9._-]+$/.test(username.trim())) {
+      newErrors.username = "User ID may only use letters, numbers, dot, dash or underscore.";
+    }
+    if (!password || password.length < 6) {
+      newErrors.password = "Choose a password with at least 6 characters.";
     }
 
     // Only required when the owner has actually configured payment methods.
@@ -131,6 +152,9 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
     const formData = new FormData();
     formData.append("productId", productId);
     formData.append("email", email);
+    formData.append("whatsapp", whatsapp.replace(/[^\d]/g, ""));
+    formData.append("username", username.trim());
+    formData.append("password", password);
     formData.append("discord", discord);
     formData.append("amountReported", amount);
     if (methodId) formData.append("paymentMethod", methodId);
@@ -169,7 +193,10 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
 
       // Small delay to show the success icon before redirecting
       setTimeout(() => {
-        router.push(`/order/success?number=${res.orderRef}`);
+        const params = new URLSearchParams({ number: String(res.orderRef) });
+        if (res.accountUsername) params.set("u", res.accountUsername);
+        if (res.accountPlatform) params.set("p", res.accountPlatform);
+        router.push(`/order/success?${params.toString()}`);
       }, 400);
 
     } catch (err) {
@@ -273,6 +300,69 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
       </div>
 
       <div>
+        <label htmlFor="whatsapp" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">WhatsApp Number</label>
+        <Input
+          id="whatsapp"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="923001234567"
+          value={whatsapp}
+          onChange={(e) => setWhatsapp(e.target.value)}
+          aria-invalid={!!errors.whatsapp}
+          aria-describedby={errors.whatsapp ? "whatsapp-error" : undefined}
+          className={`font-mono ${errors.whatsapp ? "border-red-500 focus:ring-red-500" : ""}`}
+        />
+        {errors.whatsapp ? (
+          <p id="whatsapp-error" className="text-red-400 text-xs mt-1 font-medium">{errors.whatsapp}</p>
+        ) : (
+          <p className="text-[11px] text-brand-ink-3 mt-1.5 font-mono">Country code + number, digits only.</p>
+        )}
+      </div>
+
+      <div className="pt-2 border-t border-border-subtle">
+        <p className="text-sm font-bold tracking-wide text-brand-ink-2 mb-1">Your Access Login</p>
+        <p className="text-[11px] text-brand-ink-3 mb-3 leading-relaxed">
+          Choose the User ID and Password you will use to sign in. Your account is created right away
+          and stays <strong className="text-amber-400">pending</strong> until your payment is confirmed.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="username" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">Choose User ID</label>
+            <Input
+              id="username"
+              type="text"
+              autoComplete="username"
+              placeholder="e.g. ahmed_zone"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              aria-invalid={!!errors.username}
+              aria-describedby={errors.username ? "username-error" : undefined}
+              className={`font-mono ${errors.username ? "border-red-500 focus:ring-red-500" : ""}`}
+            />
+            {errors.username && <p id="username-error" className="text-red-400 text-xs mt-1 font-medium">{errors.username}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">Choose Password</label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Minimum 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "password-error" : undefined}
+              className={errors.password ? "border-red-500 focus:ring-red-500" : ""}
+            />
+            {errors.password && <p id="password-error" className="text-red-400 text-xs mt-1 font-medium">{errors.password}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div>
         <label htmlFor="discord" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">Discord Username (optional)</label>
         <Input 
           id="discord"
@@ -286,12 +376,19 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
       <div className="pt-2 border-t border-border-subtle">
         <label htmlFor="amount" className="block text-sm font-bold tracking-wide text-brand-ink-2 mb-2">Amount you sent</label>
         
-        {/* Warning Callout */}
+        {/* Roman Urdu instruction — deliberately prominent: the single most
+            common cause of delayed orders is a wrong typed amount. */}
         <div className="flex items-start gap-3 p-3 mb-4 rounded-md border border-red-500/50 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.1)]">
           <AlertTriangle className="text-red-400 shrink-0 mt-0.5" size={18} />
-          <p className="text-xs text-red-200 leading-relaxed font-medium">
-            Type the exact amount you sent. Enter only what you actually paid. A wrong or missing amount can delay or cancel your order.
-          </p>
+          <div className="text-xs leading-relaxed">
+            <p className="text-red-200 font-bold mb-0.5">
+              Sirf wohi amount likhein jo aap ne actually bheji hai.
+            </p>
+            <p className="text-red-200/85">
+              Zyada ya kam amount likhne se aap ka order late ho sakta hai ya cancel ho sakta hai.
+              Payment bhejne ke baad hi yahan exact amount enter karein.
+            </p>
+          </div>
         </div>
 
         <div className="relative">

@@ -3,7 +3,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
-import { CheckoutForm } from "./CheckoutForm";
+import { PurchaseFlow } from "./PurchaseFlow";
 import { productContent } from "@/lib/productContent";
 import { effectivePrice, getGlobalOffer } from "@/lib/pricing";
 
@@ -31,6 +31,11 @@ export default async function CheckoutPage({ params }: Props) {
     where: { active: true },
     orderBy: { createdAt: "asc" },
   });
+
+  /* Support hand-off for the instruction step — admin-managed number. */
+  const { getWhatsAppNumber, whatsappLink } = await import("@/lib/settings");
+  const waNumber = await getWhatsAppNumber();
+  const whatsappHref = whatsappLink(waNumber, `Hi MK Panel Zone, I need help with ${product.name}`);
 
   const cover = product.coverImageUrl || productContent[product.slug]?.image || null;
 
@@ -145,10 +150,12 @@ export default async function CheckoutPage({ params }: Props) {
             Confirm Payment
           </h2>
           <GlassCard className="border-brand-blue-500/30 shadow-[0_0_30px_rgba(47,95,208,0.15)] bg-surface-glass">
-            <CheckoutForm
+            <PurchaseFlow
               productId={product.id}
               planPrice={priced.price}
+              productName={product.name}
               paymentMethods={paymentMethods.map((pm) => ({ id: pm.id, name: pm.name }))}
+              whatsappHref={whatsappHref}
             />
           </GlassCard>
         </div>

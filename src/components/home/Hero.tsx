@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { HeroProductSlider } from "@/components/home/HeroProductSlider";
+import { HeroSocialRotator } from "@/components/home/HeroSocialRotator";
 import type { Product } from "@/components/ui/ProductCard";
 import { getHeroCta } from "@/lib/freePanel";
+import { getHeroSocialLinks } from "@/lib/social";
 
 /**
- * Hero — server component so the Owner-configured Top CTA reads directly
- * from the database with zero client fetch. The slider below stays client.
+ * Hero — server component so the Owner-configured Top CTA and the admin-managed
+ * social links read directly from the database with zero client fetch.
  */
 export async function Hero({ products }: { products: Product[] }) {
-  const cta = await getHeroCta();
+  const [cta, socialLinks] = await Promise.all([getHeroCta(), getHeroSocialLinks()]);
 
   return (
     <section className="relative hero-bg overflow-x-hidden pt-[80px] sm:pt-[96px] pb-6 sm:pb-10" data-analytics-section="hero">
@@ -17,9 +19,13 @@ export async function Hero({ products }: { products: Product[] }) {
 
       <div className="relative z-10 w-full max-w-3xl mx-auto px-4 sm:px-6 pt-5 pb-0 text-center">
 
-        {/* Owner-configurable compact CTA chip — falls back to the static
-            badge when disabled, so the layout never leaves a blank gap. */}
-        {cta.enabled ? (
+        {/* Compact hero CTA slot — same footprint, three possible states:
+            1. admin-configured social links → rotating social CTA
+            2. admin-configured single CTA   → static CTA chip
+            3. nothing configured            → static brand badge */}
+        {socialLinks.length > 0 ? (
+          <HeroSocialRotator links={socialLinks} />
+        ) : cta.enabled ? (
           <Link
             href={cta.link}
             {...(cta.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}

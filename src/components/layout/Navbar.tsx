@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ShieldAlert, Home, Package, MessageCircle } from "lucide-react";
+import { Menu, X, ShieldAlert, Home, Package, MessageCircle, ChevronDown, UserPlus, LogIn } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -23,6 +23,7 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
   const isLoggedIn = sessionHint || !!isLoggedInProp;
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [resellerOpen, setResellerOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const { openFreePanel, available: freePanelAvailable } = useFreePanel();
@@ -74,17 +75,17 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
           */}
           <Link
             href="/"
-            className="brand-loop flex items-baseline gap-1.5 flex-shrink-0 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-lg px-1 pb-1 pt-0.5"
+            className="brand-loop wordmark flex-shrink-0 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 rounded-lg px-1 pb-1 pt-0.5"
             aria-label="MK Panel Zone — Home"
           >
             <span
-              className="font-black tracking-[0.06em] neon-text-blue"
+              className="wordmark-mk"
               style={{ fontSize: "clamp(13px,4vw,16px)" }}
             >
               MK
             </span>
             <span
-              className="font-semibold tracking-[0.14em] text-foreground/95"
+              className="wordmark-zone"
               style={{ fontSize: "clamp(11px,3.4vw,14px)" }}
             >
               PANEL ZONE
@@ -318,6 +319,70 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
                   <ShieldAlert size={17} className="shrink-0" />
                   <span>{isLoggedIn ? "MY PANEL" : "CUSTOMER ACCESS"}</span>
                 </Link>
+              </motion.div>
+
+              {/* Reseller Program — red-accented, equally prominent to Customer
+                  Access. Expands into Join / Login rather than navigating away. */}
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.24, duration: 0.22, ease: [0.22,1,.36,1] }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setResellerOpen((v) => !v)}
+                  aria-expanded={resellerOpen}
+                  className="w-full h-[52px] flex items-center gap-3 px-4 rounded-[14px] font-extrabold tracking-[0.06em] uppercase text-white relative overflow-hidden text-[14px] active:scale-[0.975] transition-transform duration-100 border"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(190,30,60,0.92), rgba(239,68,68,0.82))",
+                    borderColor: "rgba(255,120,140,0.35)",
+                    boxShadow: "0 4px 14px rgba(190,30,60,0.28)",
+                  }}
+                >
+                  <span
+                    className="w-[7px] h-[7px] rounded-full shrink-0"
+                    style={{ background: "#FFD5DD", boxShadow: "0 0 8px rgba(255,213,221,0.9)" }}
+                  />
+                  <span className="flex-1 text-left">RESELLER PROGRAM</span>
+                  <ChevronDown
+                    size={16}
+                    className="shrink-0 transition-transform duration-200"
+                    style={{ transform: resellerOpen ? "rotate(180deg)" : "none" }}
+                  />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {resellerOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2, ease: [0.22,1,.36,1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-1.5 pl-2 space-y-1.5">
+                        <Link
+                          href="/reseller"
+                          onClick={() => setIsOpen(false)}
+                          className="h-[46px] flex items-center gap-3 px-4 rounded-[12px] text-[13px] font-bold tracking-[0.05em] uppercase text-brand-ink-2 hover:text-white transition-colors"
+                          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-subtle)" }}
+                        >
+                          <UserPlus size={16} className="shrink-0 text-red-400" />
+                          <span>Join Reseller Program</span>
+                        </Link>
+                        <Link
+                          href="/mkpanelzoneagents"
+                          onClick={() => setIsOpen(false)}
+                          className="h-[46px] flex items-center gap-3 px-4 rounded-[12px] text-[13px] font-bold tracking-[0.05em] uppercase text-brand-ink-2 hover:text-white transition-colors"
+                          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-subtle)" }}
+                        >
+                          <LogIn size={16} className="shrink-0 text-red-400" />
+                          <span>Reseller Login</span>
+                        </Link>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             </motion.div>
           </>

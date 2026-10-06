@@ -37,6 +37,16 @@ const orderSchema = z.object({
   productId: z.string(),
   email: z.string().email(),
   discord: z.string().optional(),
+  /* WhatsApp is the primary contact channel for order follow-up. */
+  whatsapp: z.string().min(7).max(20),
+  /* Customer chooses their own access credentials at checkout. The account is
+     created UNPAID immediately; access unlocks when the owner approves. */
+  username: z
+    .string()
+    .min(3)
+    .max(32)
+    .regex(/^[a-zA-Z0-9._-]+$/, "Username may only contain letters, numbers, dot, dash or underscore."),
+  password: z.string().min(6).max(72),
   amountReported: z.string(),
   paymentMethod: z.string().optional(),
   honeypot: z.string().optional(),
@@ -74,6 +84,9 @@ export async function submitOrder(formData: FormData) {
       productId: data.productId,
       email: data.email,
       discord: data.discord,
+      whatsapp: String(data.whatsapp ?? "").replace(/[^\d]/g, ""),
+      username: String(data.username ?? "").trim(),
+      password: data.password,
       amountReported: data.amountReported,
       paymentMethod: data.paymentMethod,
       honeypot: data.honeypot,
@@ -81,7 +94,7 @@ export async function submitOrder(formData: FormData) {
     });
 
     if (!parsed.success) {
-      return { success: false, error: "Invalid data submitted." };
+      return { success: false, error: "Please check your details — username, password and WhatsApp number are required." };
     }
 
     if (parsed.data.honeypot) {
@@ -127,6 +140,35 @@ export async function submitOrder(formData: FormData) {
       return { success: false, error: "Payment proof is required." };
     }
 
+    /* ── Username availability is checked BEFORE the upload ──────────────
+       Uploading a screenshot and then failing would waste the buyer's data
+       and leave an orphan file, so the cheapest blocking check runs first. */
+    const desiredUsername = parsed.data.username;
+    const existingCustomer = await prisma.customer.findUnique({
+      where: { identifier: desiredUsername },
+      select: { id: true },
+    });
+    if (existingCustomer) {
+      return { success: false, error: `The User ID "${desiredUsername}" is already taken. Please choose another.` };
+    }
+
+    /* ── Resolve the access target for the new account ───────────────────
+       The product carries its platform + branch. If the owner has not assigned
+       them yet we fall back to the first enabled platform/branch so the buyer
+       always receives a usable account instead of a manual follow-up. */
+    const platformType = product.platformType || "ANDROID";
+    const branch = product.branchId
+      ? await prisma.platformBranch.findUnique({ where: { id: product.branchId }, select: { id: true } })
+      : await prisma.platformBranch.findFirst({
+          where: { platformType, isEnabled: true },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true },
+        });
+    const pkg = await prisma.package.findFirst({
+      where: { platformType, isDefaultForAgents: true },
+      select: { id: true },
+    });
+
     /* ── REAL upload ─────────────────────────────────────────────────────
        The previous implementation invented a "/uploads/<random>-<name>"
        path, saved it and reported success — so Admin always saw a broken
@@ -140,18 +182,48 @@ export async function submitOrder(formData: FormData) {
 
     const orderNumber = generateOrderRef();
 
-    await prisma.order.create({
-      data: {
-        orderNumber,
-        productId: product.id,
-        priceSnapshot: effective.price,
-        customerEmail: parsed.data.email,
-        customerDiscord: parsed.data.discord || "",
-        paymentProofPath: upload.path,
-        amountReported: parsedAmount,
-        amountMatches,
-        status: "pending"
-      }
+    /* ── Account + order are created together ────────────────────────────
+       The customer account exists from the moment the order is placed, but
+       starts UNPAID: protected resources stay locked until the owner approves
+       the payment in Admin. No duplicate account is created later — the owner
+       simply flips this same row to PAID. */
+    const argon2 = await import("argon2");
+    const passwordHash = await argon2.hash(parsed.data.password);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.create({
+        data: {
+          identifier: desiredUsername,
+          passwordHash,
+          platformType,
+          branchId: branch?.id ?? null,
+          packageId: pkg?.id ?? null,
+          status: "active",
+          paymentStatus: "UNPAID",
+          createdSource: "WEBSITE_ORDER",
+          agentPaymentProof: upload.path,
+        },
+        select: { id: true, identifier: true, platformType: true },
+      });
+
+      const order = await tx.order.create({
+        data: {
+          orderNumber,
+          productId: product.id,
+          priceSnapshot: effective.price,
+          customerEmail: parsed.data.email,
+          customerWhatsapp: parsed.data.whatsapp,
+          customerDiscord: parsed.data.discord || "",
+          customerId: customer.id,
+          paymentProofPath: upload.path,
+          amountReported: parsedAmount,
+          amountMatches,
+          status: "pending",
+        },
+        select: { id: true, orderNumber: true },
+      });
+
+      return { customer, order };
     });
 
     /* Resolve the destination number from the Admin-managed setting, falling
@@ -185,16 +257,28 @@ Date: ${dateStr}
 *Amount check:* ${amountMatches ? "MATCHES" : `MISMATCH - expected PKR ${effective.price.toFixed(2)}`}
 
 *Customer name:* ${truncate(parsed.data.email.split('@')[0], 80)}
-*Contact number:* ${truncate(parsed.data.email, 120)}
+*Email:* ${truncate(parsed.data.email, 120)}
+*WhatsApp:* ${truncate(parsed.data.whatsapp, 20)}
 *Discord:* ${truncate(parsed.data.discord || "N/A", 120)}
+
+*Account created:* ${truncate(created.customer.identifier, 40)} (UNPAID — awaiting your approval)
+*Platform:* ${created.customer.platformType}
 
 *Screenshot:* uploaded on the website (Order ID above). I will also attach it in this chat.
 
-Please verify my payment and send my access details.`;
+Please verify my payment and activate my access.`;
 
     const whatsappUrl = whatsappLink(ownerPhone, messageText);
 
-    const result = { success: true, orderRef: orderNumber, whatsappUrl, messageText };
+    const result = {
+      success: true as const,
+      orderRef: orderNumber,
+      whatsappUrl,
+      messageText,
+      /* Returned so the thank-you page can confirm the created account. */
+      accountUsername: created.customer.identifier,
+      accountPlatform: created.customer.platformType,
+    };
     idempotencyCache.set(parsed.data.idempotencyKey, result);
 
     return result;
@@ -747,6 +831,22 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
 
   const paymentStatus = ((formData.get("paymentStatus") as string) || "PAID") === "UNPAID" ? "UNPAID" : "PAID";
 
+  /* Optional explicit branch choice. The reseller knows which branch the sale
+     belongs to, so a client-selected branch is validated against the platform
+     before it is trusted — a mismatched or unknown id falls back to the
+     platform's default branch instead of writing a broken relation. */
+  const rawBranchId = ((formData.get("branchId") as string) || "").trim() || null;
+  let branchId: string | null = null;
+  if (rawBranchId) {
+    const branch = await prisma.platformBranch.findUnique({
+      where: { id: rawBranchId },
+      select: { id: true, platformType: true, isEnabled: true },
+    });
+    if (branch && branch.platformType === platformType && branch.isEnabled) {
+      branchId = branch.id;
+    }
+  }
+
   const argon2 = await import("argon2");
   const passwordHash = await argon2.hash(password);
 
@@ -755,6 +855,7 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
       identifier,
       passwordHash,
       platformType,
+      branchId,
       packageId,
       paymentStatus,
       createdSource: "AGENT",
@@ -763,9 +864,11 @@ export async function agentCreateCustomer(prevState: any, formData: FormData) {
     },
   });
 
-  /* Attach agent-created customers to their platform's default branch (if
-     one exists) so they land in the right section from their first login. */
-  await ensureCustomerBranch(created);
+  /* No explicit choice (or an invalid one) → attach to the platform's default
+     branch so the customer lands in the right section from their first login. */
+  if (!branchId) {
+    await ensureCustomerBranch(created);
+  }
 
   const { revalidatePath } = await import("next/cache");
   revalidatePath("/mkpanelzoneadmin/customers");
