@@ -24,7 +24,8 @@ import {
   Globe,
   Settings,
   ScrollText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sparkles
 } from "lucide-react";
 import { type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -78,6 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Website",
     items: [
       { name: "Content Manager", href: "/mkpanelzoneadmin/content", icon: FileText },
+      { name: "Hero Social CTA", href: "/mkpanelzoneadmin/hero-cta", icon: Sparkles },
       { name: "Announcements", href: "/mkpanelzoneadmin/announcements", icon: Megaphone },
       { name: "Popups", href: "/mkpanelzoneadmin/popups", icon: MessageSquare },
       { name: "Free Panel Offer", href: "/mkpanelzoneadmin/free-panel", icon: Gift },

@@ -3,14 +3,14 @@ import { HeroProductSlider } from "@/components/home/HeroProductSlider";
 import { HeroSocialRotator } from "@/components/home/HeroSocialRotator";
 import type { Product } from "@/components/ui/ProductCard";
 import { getHeroCta } from "@/lib/freePanel";
-import { getHeroSocialLinks } from "@/lib/social";
+import { getHeroCtas } from "@/lib/social";
 
 /**
  * Hero — server component so the Owner-configured Top CTA and the admin-managed
- * social links read directly from the database with zero client fetch.
+ * hero social CTAs read directly from the database with zero client fetch.
  */
 export async function Hero({ products }: { products: Product[] }) {
-  const [cta, socialLinks] = await Promise.all([getHeroCta(), getHeroSocialLinks()]);
+  const [cta, heroCtas] = await Promise.all([getHeroCta(), getHeroCtas()]);
 
   return (
     <section className="relative hero-bg overflow-x-hidden pt-[80px] sm:pt-[96px] pb-6 sm:pb-10" data-analytics-section="hero">
@@ -23,8 +23,8 @@ export async function Hero({ products }: { products: Product[] }) {
             1. admin-configured social links → rotating social CTA
             2. admin-configured single CTA   → static CTA chip
             3. nothing configured            → static brand badge */}
-        {socialLinks.length > 0 ? (
-          <HeroSocialRotator links={socialLinks} />
+        {heroCtas.length > 0 ? (
+          <HeroSocialRotator links={heroCtas} />
         ) : cta.enabled ? (
           <Link
             href={cta.link}

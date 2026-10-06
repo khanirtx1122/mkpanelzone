@@ -146,9 +146,14 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
                 onFocus={() => setResellerDesktopOpen(true)}
                 className={`relative inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-bold tracking-[0.07em] uppercase rounded-full transition-colors duration-200 ${
                   pathname.startsWith("/reseller") || pathname.startsWith("/mkpanelzoneagents")
-                    ? "text-foreground"
-                    : "text-brand-ink-3 hover:text-foreground"
+                    ? "text-[#FF5C7A]"
+                    : "text-[#FF5C7A]/80 hover:text-[#FF7D95]"
                 }`}
+                style={
+                  resellerDesktopOpen
+                    ? { background: "rgba(239,68,68,0.10)" }
+                    : undefined
+                }
               >
                 <span className="relative z-10">Reseller Program</span>
                 <ChevronDown
@@ -159,7 +164,8 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
                 {(pathname.startsWith("/reseller") || pathname.startsWith("/mkpanelzoneagents")) && (
                   <motion.span
                     layoutId="nav-active"
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full bg-brand-blue-500"
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full"
+                    style={{ background: "#FF2D55" }}
                     transition={{ type: "spring", stiffness: 380, damping: 32 }}
                   />
                 )}

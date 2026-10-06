@@ -132,30 +132,82 @@ export async function getSocialLinks(): Promise<SocialLink[]> {
   }
 }
 
-/** Enabled links ordered for the hero rotator (falls back to stored order). */
-export async function getHeroSocialLinks(): Promise<SocialLink[]> {
-  const links = await getSocialLinks();
+/** SiteSetting key for the hero CTA rotator (Owner-managed, independent of the
+    footer list so the Owner can label and order the hero states separately). */
+export const HERO_CTAS_KEY = "hero_social_ctas";
 
-  /* WhatsApp always has a valid destination because the owner already
-     configures a PRIMARY WhatsApp number for support CTAs. If no explicit
-     whatsapp social link exists, derive one from that number so the rotator is
-     useful out of the box instead of falling back to the static badge.
-     The other platforms genuinely need a URL the owner must supply — inventing
-     one would produce a dead CTA, so they are skipped until configured. */
-  if (!links.some((l) => l.platform === "whatsapp")) {
-    try {
-      const { getWhatsAppNumber, whatsappLink } = await import("./settings");
-      const number = await getWhatsAppNumber();
-      const url = whatsappLink(number, "MK Panel Zone — official WhatsApp channel");
-      if (url) links.unshift({ platform: "whatsapp", url, enabled: true });
-    } catch {
-      /* no WhatsApp configured — the rotator simply starts with what exists */
-    }
+export type HeroCta = { platform: string; label: string; url: string; enabled: boolean };
+
+/** Ordered hero CTA entries as stored by Admin (no fallback applied). */
+export async function getStoredHeroCtas(): Promise<HeroCta[]> {
+  try {
+    const s = await getSettings([HERO_CTAS_KEY]);
+    const raw = s[HERO_CTAS_KEY];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as HeroCta[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((c) => c && typeof c.platform === "string")
+      .map((c) => ({
+        platform: c.platform.toLowerCase(),
+        label: typeof c.label === "string" ? c.label : "",
+        url: typeof c.url === "string" ? c.url : "",
+        enabled: c.enabled !== false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolves the hero rotator entries.
+ *
+ * Order of truth:
+ *   1. Hero-specific entries saved in Admin → Hero CTA (respecting enabled +
+ *      a valid http(s) URL).
+ *   2. Otherwise the enabled footer social links.
+ *   3. Otherwise a WhatsApp entry derived from the admin-configured PRIMARY
+ *      WhatsApp number, so the hero is useful before anything else is set up.
+ *
+ * Platforms without a valid URL are dropped entirely — a dead CTA is never
+ * rendered, and no URL is ever invented.
+ */
+export async function getHeroCtas(): Promise<HeroCta[]> {
+  const stored = await getStoredHeroCtas();
+  const usable = stored.filter((c) => c.enabled && /^https?:\/\//i.test(c.url));
+  if (usable.length > 0) return usable;
+
+  const links = await getSocialLinks();
+  const fromFooter: HeroCta[] = links
+    .filter((l) => SOCIAL_META[l.platform])
+    .map((l) => ({ platform: l.platform, label: "", url: l.url, enabled: true }));
+
+  if (fromFooter.some((l) => l.platform === "whatsapp")) {
+    return sortHeroOrder(fromFooter);
   }
 
+  try {
+    const { getWhatsAppNumber, whatsappLink } = await import("./settings");
+    const number = await getWhatsAppNumber();
+    const url = whatsappLink(number, "MK Panel Zone — official WhatsApp channel");
+    if (url) fromFooter.unshift({ platform: "whatsapp", label: "", url, enabled: true });
+  } catch {
+    /* nothing configured at all — the hero falls back to the static badge */
+  }
+
+  return sortHeroOrder(fromFooter);
+}
+
+function sortHeroOrder(links: HeroCta[]): HeroCta[] {
   const rank = (p: string) => {
     const i = HERO_ROTATION_ORDER.indexOf(p as SocialPlatform);
     return i === -1 ? 99 : i;
   };
   return [...links].sort((a, b) => rank(a.platform) - rank(b.platform)).slice(0, 4);
+}
+
+/** Enabled links ordered for the hero rotator (falls back to stored order). */
+export async function getHeroSocialLinks(): Promise<SocialLink[]> {
+  const ctas = await getHeroCtas();
+  return ctas.map((c) => ({ platform: c.platform, url: c.url, enabled: true }));
 }

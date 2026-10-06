@@ -3,7 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { ADMIN_TAGS } from "@/lib/adminCache";
 import { FREE_PANEL_SETTING_KEY, sanitizeUrl } from "@/lib/freePanel";
 import { isValidBranchSlug } from "@/lib/branches";
 import { requireOwner } from "@/lib/owner";
@@ -464,6 +465,9 @@ export async function updateOrderStatus(formData: FormData) {
       where: { id: orderId },
       data: { status }
     });
+    /* The orders list is served from a cross-request cache, so the tag must be
+       invalidated for the new status to appear immediately. */
+    revalidateTag(ADMIN_TAGS.orders, "max");
     revalidatePath("/mkpanelzoneadmin/orders");
     revalidatePath(`/mkpanelzoneadmin/orders/${orderId}`);
     return { success: true };
@@ -1021,6 +1025,9 @@ export async function adminDeleteProofs(
     }
   }
 
+  revalidateTag(ADMIN_TAGS.proofs, "max");
+  revalidateTag(ADMIN_TAGS.orders, "max");
+  revalidateTag(ADMIN_TAGS.customers, "max");
   revalidatePath("/mkpanelzoneadmin/proofs");
   revalidatePath("/mkpanelzoneadmin/orders");
   revalidatePath("/mkpanelzoneadmin/customers");
@@ -1093,5 +1100,52 @@ export async function saveSocialLinks(links: SocialLink[]): Promise<{ success: b
   } catch (error) {
     console.error("[saveSocialLinks]", error);
     return { success: false, error: "Failed to save social links." };
+  }
+}
+
+// ----------------------------------------------------------------------
+// HERO SOCIAL CTA ROTATOR (Admin-controlled)
+// ----------------------------------------------------------------------
+
+export type HeroCtaInput = { platform: string; label: string; url: string; enabled: boolean };
+
+/**
+ * Saves the hero rotator entries.
+ *
+ * Stored separately from the footer social links so the Owner can label and
+ * order the hero states on their own. Entries without a valid http(s) URL are
+ * dropped here rather than at render time, so the public hero can never be
+ * handed a dead CTA.
+ */
+export async function saveHeroCtas(ctas: HeroCtaInput[]): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { HERO_CTAS_KEY } = await import("@/lib/social");
+    const { SOCIAL_META } = await import("@/lib/social");
+
+    const cleaned = ctas
+      .slice(0, 8)
+      .map((c) => ({
+        platform: (c.platform || "").toLowerCase().trim(),
+        label: (c.label || "").trim().slice(0, 40),
+        url: (c.url || "").trim(),
+        enabled: c.enabled !== false,
+      }))
+      .filter((c) => c.platform && SOCIAL_META[c.platform])
+      // A missing/invalid URL is kept as an empty entry so the Owner can see
+      // and fix it in Admin, but it will not reach the public hero.
+      .map((c) => ({ ...c, url: /^https?:\/\//i.test(c.url) ? c.url : "" }));
+
+    await prisma.siteSetting.upsert({
+      where: { key: HERO_CTAS_KEY },
+      update: { value: JSON.stringify(cleaned) },
+      create: { key: HERO_CTAS_KEY, value: JSON.stringify(cleaned) },
+    });
+
+    revalidatePath("/mkpanelzoneadmin/hero-cta");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("[saveHeroCtas]", error);
+    return { success: false, error: "Failed to save hero CTAs." };
   }
 }

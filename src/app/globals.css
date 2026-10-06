@@ -1015,3 +1015,183 @@ html[data-perf="low"] [data-reveal] {
 }
 
 html[data-perf="low"] .wordmark::after { animation: none; opacity: 0; }
+
+/* ================================================================
+   HERO SOCIAL CTA ROTATOR — premium per-platform treatment
+   ================================================================
+   Each platform has a distinct, restrained identity in BOTH themes.
+   Styling lives in CSS (not inline JS colors) so switching the theme
+   repaints instantly without a React re-render, and so the light theme
+   can use genuinely different surfaces rather than tinted versions of
+   the dark ones.
+
+   Footprint note: the chip is a fixed 34px tall pill. Only the icon,
+   text and internal surface change between states — never the size. */
+
+.hero-social-chip {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  transition:
+    opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- WHATSAPP ---------- */
+/* Light: frosted off-white with a refined green edge — a premium SaaS pill,
+   not a fluorescent green block. */
+.hero-social-chip[data-platform="whatsapp"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F4FBF6 100%);
+  border-color: rgba(18, 140, 74, 0.30);
+  color: #0E3D24;
+  box-shadow:
+    0 1px 2px rgba(16, 40, 28, 0.06),
+    0 6px 16px -10px rgba(18, 140, 74, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="whatsapp"] {
+  background: linear-gradient(135deg, rgba(18, 32, 27, 0.95) 0%, rgba(12, 22, 19, 0.95) 100%);
+  border-color: rgba(37, 211, 102, 0.34);
+  color: #CFF6DF;
+  box-shadow:
+    0 6px 18px -12px rgba(37, 211, 102, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.hero-social-chip[data-platform="whatsapp"] .hero-social-dot {
+  background: #25D366;
+  box-shadow: 0 0 7px rgba(37, 211, 102, 0.85);
+}
+.hero-social-chip[data-platform="whatsapp"] .hero-social-icon { color: #128C4A; }
+[data-theme="dark"] .hero-social-chip[data-platform="whatsapp"] .hero-social-icon { color: #4ADE80; }
+
+/* ---------- TIKTOK ---------- */
+.hero-social-chip[data-platform="tiktok"] {
+  background: linear-gradient(135deg, #1C1F26 0%, #12151A 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 6px 16px -10px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.hero-social-chip[data-platform="tiktok"] .hero-social-dot {
+  background: #25F4EE;
+  box-shadow: 0 0 7px rgba(254, 44, 85, 0.7);
+}
+.hero-social-chip[data-platform="tiktok"] .hero-social-icon { color: #FFFFFF; }
+
+/* ---------- DISCORD ---------- */
+.hero-social-chip[data-platform="discord"] {
+  background: linear-gradient(135deg, #F7F8FF 0%, #EEF0FF 100%);
+  border-color: rgba(88, 101, 242, 0.32);
+  color: #2A2F6B;
+  box-shadow:
+    0 1px 2px rgba(30, 34, 80, 0.07),
+    0 6px 16px -10px rgba(88, 101, 242, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="discord"] {
+  background: linear-gradient(135deg, rgba(28, 30, 58, 0.95) 0%, rgba(20, 22, 44, 0.95) 100%);
+  border-color: rgba(88, 101, 242, 0.40);
+  color: #C9CEFF;
+  box-shadow:
+    0 6px 18px -12px rgba(88, 101, 242, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.hero-social-chip[data-platform="discord"] .hero-social-dot {
+  background: #5865F2;
+  box-shadow: 0 0 7px rgba(88, 101, 242, 0.8);
+}
+.hero-social-chip[data-platform="discord"] .hero-social-icon { color: #5865F2; }
+
+/* ---------- INSTAGRAM ---------- */
+.hero-social-chip[data-platform="instagram"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF5F9 100%);
+  border-color: rgba(225, 48, 108, 0.26);
+  color: #5A1B33;
+  box-shadow:
+    0 1px 2px rgba(60, 20, 40, 0.06),
+    0 6px 16px -10px rgba(225, 48, 108, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="instagram"] {
+  background: linear-gradient(135deg, rgba(34, 26, 32, 0.95) 0%, rgba(24, 18, 23, 0.95) 100%);
+  border-color: rgba(225, 48, 108, 0.34);
+  color: #FFD3E2;
+  box-shadow:
+    0 6px 18px -12px rgba(225, 48, 108, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.hero-social-chip[data-platform="instagram"] .hero-social-dot {
+  background: #E1306C;
+  box-shadow: 0 0 7px rgba(225, 48, 108, 0.75);
+}
+.hero-social-chip[data-platform="instagram"] .hero-social-icon { color: #C13584; }
+
+/* ---------- FACEBOOK ---------- */
+.hero-social-chip[data-platform="facebook"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F2F7FF 100%);
+  border-color: rgba(24, 119, 242, 0.28);
+  color: #123A6B;
+  box-shadow:
+    0 1px 2px rgba(18, 40, 80, 0.06),
+    0 6px 16px -10px rgba(24, 119, 242, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="facebook"] {
+  background: linear-gradient(135deg, rgba(22, 30, 46, 0.95) 0%, rgba(15, 21, 33, 0.95) 100%);
+  border-color: rgba(24, 119, 242, 0.38);
+  color: #BFD8FF;
+  box-shadow: 0 6px 18px -12px rgba(24, 119, 242, 0.55);
+}
+.hero-social-chip[data-platform="facebook"] .hero-social-dot {
+  background: #1877F2;
+  box-shadow: 0 0 7px rgba(24, 119, 242, 0.8);
+}
+.hero-social-chip[data-platform="facebook"] .hero-social-icon { color: #1877F2; }
+
+/* ---------- YOUTUBE / TELEGRAM / X ---------- */
+.hero-social-chip[data-platform="youtube"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF3F3 100%);
+  border-color: rgba(255, 0, 0, 0.24);
+  color: #5C1010;
+  box-shadow: 0 6px 16px -10px rgba(255, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="youtube"] {
+  background: linear-gradient(135deg, rgba(36, 22, 22, 0.95) 0%, rgba(26, 15, 15, 0.95) 100%);
+  border-color: rgba(255, 0, 0, 0.34);
+  color: #FFC9C9;
+}
+.hero-social-chip[data-platform="youtube"] .hero-social-dot { background: #FF0000; box-shadow: 0 0 7px rgba(255,0,0,0.75); }
+.hero-social-chip[data-platform="youtube"] .hero-social-icon { color: #E53935; }
+
+.hero-social-chip[data-platform="telegram"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F1FAFE 100%);
+  border-color: rgba(34, 158, 217, 0.28);
+  color: #10405A;
+  box-shadow: 0 6px 16px -10px rgba(34, 158, 217, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+[data-theme="dark"] .hero-social-chip[data-platform="telegram"] {
+  background: linear-gradient(135deg, rgba(20, 30, 38, 0.95) 0%, rgba(13, 21, 27, 0.95) 100%);
+  border-color: rgba(34, 158, 217, 0.36);
+  color: #B6E6FA;
+}
+.hero-social-chip[data-platform="telegram"] .hero-social-dot { background: #229ED9; box-shadow: 0 0 7px rgba(34,158,217,0.8); }
+.hero-social-chip[data-platform="telegram"] .hero-social-icon { color: #229ED9; }
+
+.hero-social-chip[data-platform="x"] {
+  background: linear-gradient(135deg, #1C1F26 0%, #12151A 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.hero-social-chip[data-platform="x"] .hero-social-dot { background: #FFFFFF; box-shadow: 0 0 7px rgba(255,255,255,0.6); }
+.hero-social-chip[data-platform="x"] .hero-social-icon { color: #FFFFFF; }
+
+/* Reduced motion: no transform shift, a plain opacity swap. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-social-chip { transition: opacity 0.18s linear !important; }
+  .hero-social-chip[data-inactive="true"] { transform: none !important; }
+}

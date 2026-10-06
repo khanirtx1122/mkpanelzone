@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 
 /**
  * OWNER IDENTITY — implicit by design.
@@ -8,8 +9,11 @@ import { cache } from "react";
  * OWNER agent row is auto-provisioned so audit logs and "created by" fields
  * keep working. This is an explicit project requirement.
  *
- * PERFORMANCE: this is a cached READ that only writes when the row is
- * genuinely missing, and within a request every call site shares one lookup.
+ * PERFORMANCE: this runs in the admin layout, i.e. on EVERY admin navigation.
+ * Profiling against the live database showed each query costs ~356ms purely in
+ * network round-trip (the DB is in a different region), so this lookup alone
+ * added ~356ms to every single admin click. The owner row is effectively
+ * static, so it is now cached across requests with a long window — see below.
  */
 export type OwnerSession = {
   userId: string;
@@ -19,9 +23,17 @@ export type OwnerSession = {
 
 const OWNER_USERNAME = "owner";
 
-/** Resolves the implicit OWNER identity, creating it only if it is missing. */
-export const getOwnerSession = cache(async (): Promise<OwnerSession | null> => {
-  try {
+/** Cache tag so an owner change can invalidate the identity immediately. */
+export const OWNER_CACHE_TAG = "owner-identity";
+
+/**
+ * The actual lookup. Cached across requests for 5 minutes: the owner row is
+ * created once and its id never changes, so re-reading it on every navigation
+ * bought nothing but latency. Mutations that touch the owner row call
+ * revalidateTag(OWNER_CACHE_TAG).
+ */
+const readOwner = unstable_cache(
+  async (): Promise<OwnerSession | null> => {
     const { prisma } = await import("@/lib/prisma");
 
     const existing = await prisma.agent.findUnique({
@@ -52,9 +64,18 @@ export const getOwnerSession = cache(async (): Promise<OwnerSession | null> => {
       select: { id: true, username: true, role: true },
     });
     return { userId: created.id, username: created.username, role: created.role };
+  },
+  ["owner-identity"],
+  { revalidate: 300, tags: [OWNER_CACHE_TAG] },
+);
+
+/** Per-request dedup on top of the cross-request cache. */
+export const getOwnerSession = cache(async (): Promise<OwnerSession | null> => {
+  try {
+    return await readOwner();
   } catch (error) {
-    // A race between two concurrent first-requests can violate the unique
-    // username; retry the read once rather than failing the whole page.
+    // A cache failure must never take the admin panel down — fall back to a
+    // direct read so the owner can still get in.
     try {
       const { prisma } = await import("@/lib/prisma");
       const row = await prisma.agent.findUnique({

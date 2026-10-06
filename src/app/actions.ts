@@ -226,6 +226,16 @@ export async function submitOrder(formData: FormData) {
       return { customer, order };
     });
 
+    /* A new order must appear in the (cached) admin lists immediately. */
+    try {
+      const { revalidateTag } = await import("next/cache");
+      const { ADMIN_TAGS } = await import("@/lib/adminCache");
+      revalidateTag(ADMIN_TAGS.orders, "max");
+      revalidateTag(ADMIN_TAGS.customers, "max");
+    } catch (e) {
+      console.error("[submitOrder] cache invalidation failed:", e);
+    }
+
     /* Resolve the destination number from the Admin-managed setting, falling
        back to the legacy env var. Owner can change it any time without a deploy. */
     const { getWhatsAppNumber, whatsappLink } = await import("@/lib/settings");

@@ -1,8 +1,7 @@
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { resolveProof } from "@/lib/paymentProof";
+import { getOrdersPageCached } from "@/lib/adminCache";
 
 const PAGE_SIZE = 25;
 
@@ -14,32 +13,12 @@ export default async function OrdersPage(props: {
   const query = searchParams?.query || "";
   const page = Math.max(1, parseInt(searchParams?.page || "1", 10) || 1);
 
-  const whereClause: Prisma.OrderWhereInput = {};
-  if (statusFilter !== "ALL") {
-    whereClause.status = statusFilter.toLowerCase();
-  }
-  
-  if (query) {
-    whereClause.OR = [
-      { orderNumber: { contains: query, mode: "insensitive" } },
-      { customerEmail: { contains: query, mode: "insensitive" } },
-    ];
-  }
-
-  /* Paginated: the previous unbounded findMany loaded every order plus its
-     product on each render. Count + page keeps the query flat as data grows. */
-  const [orders, total] = await Promise.all([
-    prisma.order.findMany({
-      where: whereClause,
-      include: {
-        product: { select: { name: true, coverImageUrl: true } }
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
-    prisma.order.count({ where: whereClause }),
-  ]);
+  /* Cached across requests (see lib/adminCache): with the database in another
+     region, every query costs ~356ms of pure round-trip regardless of size, so
+     repeating this on every click was the real source of the panel feeling
+     slow. Mutations invalidate ADMIN_TAGS.orders so saved changes appear
+     immediately. */
+  const { rows: orders, total } = await getOrdersPageCached(statusFilter, query, page, PAGE_SIZE);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -127,6 +106,9 @@ export default async function OrdersPage(props: {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-white">{order.customerEmail}</div>
+                      {order.customerWhatsapp && (
+                        <div className="text-xs text-brand-ink-3 font-mono">WA: {order.customerWhatsapp}</div>
+                      )}
                       {order.customerDiscord && <div className="text-xs text-brand-ink-3">{order.customerDiscord}</div>}
                     </td>
                     <td className="px-6 py-4">
