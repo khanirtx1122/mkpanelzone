@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   WhatsAppIcon,
   TikTokIcon,
@@ -37,22 +37,29 @@ const DEFAULT_LABEL: Record<string, string> = {
   x: "Follow on X",
 };
 
-const ROTATE_MS = 4500;
+/* Timing: a 2.8s cycle = ~2.45s fully visible, 175ms fade out, swap, 175ms
+   fade in. Fast and premium, with no long gap where the chip is invisible. */
+const CYCLE_MS = 2800;
+const FADE_MS = 175;
 
 /**
  * HERO COMPACT CTA ROTATOR.
  *
- * Occupies the same 34px pill as the original static badge: one CTA visible at
- * a time, cross-fading every ~4.5s, looping forever. Only the icon, text and
- * internal surface change — the outer container is a fixed height with a
- * min-width, so the headline below can never move.
+ * EXACTLY ONE pill exists in the DOM at all times — one container, one
+ * position, one footprint. There is a single persistent <a>; only its icon,
+ * label, href and platform theme attribute change as the index advances.
  *
- * Visual identity per platform (including genuinely separate light and dark
- * treatments) lives in globals.css keyed on `data-platform`, so a theme switch
- * repaints instantly with no React re-render.
+ * This replaces the previous approach, which rendered one absolutely
+ * positioned element PER platform. Because each label has a different width,
+ * those elements did not resolve to identical centres and could appear offset
+ * or overflowing, producing the "multiple pills in different places" symptom.
+ * With a single element that problem cannot occur: there is nothing else to
+ * position.
  *
- * Items come from Admin; platforms without a valid URL are not rendered at all,
- * so a dead CTA can never appear.
+ * Motion is opacity-only. The wrapper has a fixed 34px height, so the headline
+ * below can never move and the hero height never changes.
+ *
+ * Items come from Admin; platforms without a valid URL are never rendered.
  */
 export function HeroSocialRotator({ links }: { links: RotatorLink[] }) {
   const items = useMemo(
@@ -61,6 +68,9 @@ export function HeroSocialRotator({ links }: { links: RotatorLink[] }) {
   );
 
   const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const fadeTimer = useRef<number | null>(null);
+
   const reduced = useSyncExternalStore(
     (onChange) => {
       if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
@@ -78,61 +88,63 @@ export function HeroSocialRotator({ links }: { links: RotatorLink[] }) {
     () => false,
   );
 
+  /* The index is clamped during render rather than in an effect: if the Owner
+     disables a platform in Admin and the list shrinks, we simply read a valid
+     entry instead of scheduling a corrective state update. */
+  const safeIndex = items.length > 0 ? Math.min(index, items.length - 1) : 0;
+
+  /* Rotation. A single interval drives: fade out → swap content → fade in.
+     With one item there is no rotation at all, so no pointless transitions —
+     `visible` already starts true, so the single pill simply stays put. */
   useEffect(() => {
     if (items.length < 2) return;
+
     const id = window.setInterval(() => {
-      setIndex((i) => (i + 1) % items.length);
-    }, ROTATE_MS);
-    return () => window.clearInterval(id);
+      setVisible(false); // fade out
+      fadeTimer.current = window.setTimeout(() => {
+        setIndex((i) => (i + 1) % items.length); // swap content in place
+        setVisible(true); // fade in
+      }, FADE_MS);
+    }, CYCLE_MS);
+
+    return () => {
+      window.clearInterval(id);
+      if (fadeTimer.current !== null) window.clearTimeout(fadeTimer.current);
+    };
   }, [items.length]);
 
   if (items.length === 0) return null;
 
-  const activeIndex = index % items.length;
+  const current = items[safeIndex];
+  const Icon = ICONS[current.platform];
+  const label = current.label?.trim() || DEFAULT_LABEL[current.platform] || current.platform;
 
   return (
-    <div className="flex justify-center mb-4" style={{ minHeight: 34 }}>
-      {/* Fixed-size stage: no dimension animation, ever. */}
-      <div className="relative h-[34px]" style={{ minWidth: 196 }}>
-        {items.map((item, i) => {
-          const Icon = ICONS[item.platform];
-          const active = i === activeIndex;
-          const label = item.label?.trim() || DEFAULT_LABEL[item.platform] || item.platform;
-
-          return (
-            <a
-              key={item.platform}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-hidden={!active}
-              tabIndex={active ? 0 : -1}
-              data-platform={item.platform}
-              data-inactive={active ? undefined : "true"}
-              data-analytics-click={`cta:hero-${item.platform}`}
-              className="hero-social-chip absolute inset-x-0 mx-auto inline-flex items-center gap-2 pl-2.5 pr-3 h-[34px] rounded-full border whitespace-nowrap focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2"
-              style={{
-                width: "fit-content",
-                opacity: active ? 1 : 0,
-                transform: active
-                  ? "translateY(0) scale(1)"
-                  : reduced
-                    ? "none"
-                    : "translateY(5px) scale(0.98)",
-                pointerEvents: active ? "auto" : "none",
-              }}
-            >
-              <span className="hero-social-dot w-[6px] h-[6px] rounded-full shrink-0" />
-              <span className="hero-social-icon inline-flex shrink-0">
-                <Icon size={13} />
-              </span>
-              <span className="text-[10px] sm:text-[11px] font-extrabold tracking-[0.13em] uppercase">
-                {label}
-              </span>
-            </a>
-          );
-        })}
-      </div>
+    /* Fixed-height, horizontally centred slot. Nothing here depends on the
+       platform, so the pill can never move. */
+    <div className="flex justify-center mb-4" style={{ height: 34 }}>
+      <a
+        href={current.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-platform={current.platform}
+        data-analytics-click={`cta:hero-${current.platform}`}
+        aria-label={label}
+        className="hero-social-chip inline-flex items-center gap-2 pl-2.5 pr-3 h-[34px] rounded-full border whitespace-nowrap focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2"
+        style={{
+          opacity: visible ? 1 : 0,
+          transition: reduced ? "opacity 90ms linear" : `opacity ${FADE_MS}ms linear`,
+          willChange: "opacity",
+        }}
+      >
+        <span className="hero-social-dot w-[6px] h-[6px] rounded-full shrink-0" />
+        <span className="hero-social-icon inline-flex shrink-0">
+          <Icon size={13} />
+        </span>
+        <span className="text-[10px] sm:text-[11px] font-extrabold tracking-[0.13em] uppercase">
+          {label}
+        </span>
+      </a>
     </div>
   );
 }

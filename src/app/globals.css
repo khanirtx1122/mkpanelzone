@@ -1034,9 +1034,9 @@ html[data-perf="low"] .wordmark::after { animation: none; opacity: 0; }
   isolation: isolate;
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
-  transition:
-    opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Opacity only — the rotation is a fade replacement in a single fixed slot.
+     No transform, so the pill can never appear to move or duplicate. */
+  transition: opacity 0.175s linear;
 }
 
 /* ---------- WHATSAPP ---------- */
@@ -1190,8 +1190,7 @@ html[data-perf="low"] .wordmark::after { animation: none; opacity: 0; }
 .hero-social-chip[data-platform="x"] .hero-social-dot { background: #FFFFFF; box-shadow: 0 0 7px rgba(255,255,255,0.6); }
 .hero-social-chip[data-platform="x"] .hero-social-icon { color: #FFFFFF; }
 
-/* Reduced motion: no transform shift, a plain opacity swap. */
+/* Reduced motion: a plain, very short opacity swap — same rotation logic. */
 @media (prefers-reduced-motion: reduce) {
-  .hero-social-chip { transition: opacity 0.18s linear !important; }
-  .hero-social-chip[data-inactive="true"] { transform: none !important; }
+  .hero-social-chip { transition: opacity 0.09s linear !important; }
 }
