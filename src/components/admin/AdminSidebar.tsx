@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SidebarLink } from "./SidebarLink";
 
 type NavItem = {
   name: string;
@@ -217,24 +218,25 @@ export function AdminSidebar({
                 {group.items.map((item) => {
                   const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
                   const Icon = item.icon;
-                  
+
                   return (
-                    <Link 
+                    <SidebarLink
                       key={item.href}
-                      href={item.href} 
-                      onClick={() => setIsMobileOpen(false)}
-                      className={`admin-press flex items-center gap-3 px-4 py-3 md:py-2.5 rounded-lg transition-all group relative active:bg-white/10 ${
-                        isActive 
-                          ? "bg-[#0E1420] text-white font-bold" 
+                      href={item.href}
+                      exact={item.exact}
+                      onNavigate={() => setIsMobileOpen(false)}
+                      className={`admin-press group flex items-center gap-3 px-4 py-3 md:py-2.5 rounded-lg transition-all relative active:bg-white/10 ${
+                        isActive
+                          ? "bg-[#0E1420] text-white font-bold"
                           : "text-brand-ink-2 hover:text-white hover:bg-white/5 font-medium"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-brand-blue-500 rounded-r-md" />
-                      )}
+                      {/* The instant-feedback state is driven by data-active so
+                          the highlight appears on the same frame as the click. */}
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-brand-blue-500 rounded-r-md opacity-0 group-data-[active=true]:opacity-100" />
                       <Icon size={18} className={`transition-colors shrink-0 ${isActive ? 'text-brand-blue-400' : 'group-hover:text-brand-blue-400'}`} />
                       <span className="tracking-wide text-sm">{item.name}</span>
-                    </Link>
+                    </SidebarLink>
                   );
                 })}
               </nav>

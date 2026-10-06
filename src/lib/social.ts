@@ -135,6 +135,24 @@ export async function getSocialLinks(): Promise<SocialLink[]> {
 /** Enabled links ordered for the hero rotator (falls back to stored order). */
 export async function getHeroSocialLinks(): Promise<SocialLink[]> {
   const links = await getSocialLinks();
+
+  /* WhatsApp always has a valid destination because the owner already
+     configures a PRIMARY WhatsApp number for support CTAs. If no explicit
+     whatsapp social link exists, derive one from that number so the rotator is
+     useful out of the box instead of falling back to the static badge.
+     The other platforms genuinely need a URL the owner must supply — inventing
+     one would produce a dead CTA, so they are skipped until configured. */
+  if (!links.some((l) => l.platform === "whatsapp")) {
+    try {
+      const { getWhatsAppNumber, whatsappLink } = await import("./settings");
+      const number = await getWhatsAppNumber();
+      const url = whatsappLink(number, "MK Panel Zone — official WhatsApp channel");
+      if (url) links.unshift({ platform: "whatsapp", url, enabled: true });
+    } catch {
+      /* no WhatsApp configured — the rotator simply starts with what exists */
+    }
+  }
+
   const rank = (p: string) => {
     const i = HERO_ROTATION_ORDER.indexOf(p as SocialPlatform);
     return i === -1 ? 99 : i;

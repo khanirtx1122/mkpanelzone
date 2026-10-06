@@ -191,13 +191,12 @@ export function CheckoutForm({ productId, planPrice, paymentMethods = [] }: Prop
 
       setStatus("success");
 
-      // Small delay to show the success icon before redirecting
-      setTimeout(() => {
-        const params = new URLSearchParams({ number: String(res.orderRef) });
-        if (res.accountUsername) params.set("u", res.accountUsername);
-        if (res.accountPlatform) params.set("p", res.accountPlatform);
-        router.push(`/order/success?${params.toString()}`);
-      }, 400);
+      // Navigate immediately — the success state is already rendered, and the
+      // previous 400ms artificial delay only made a completed order feel slow.
+      const params = new URLSearchParams({ number: String(res.orderRef) });
+      if (res.accountUsername) params.set("u", res.accountUsername);
+      if (res.accountPlatform) params.set("p", res.accountPlatform);
+      router.push(`/order/success?${params.toString()}`);
 
     } catch (err) {
       setStatus("error");

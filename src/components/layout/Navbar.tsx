@@ -24,6 +24,7 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [resellerOpen, setResellerOpen] = useState(false);
+  const [resellerDesktopOpen, setResellerDesktopOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const { openFreePanel, available: freePanelAvailable } = useFreePanel();
@@ -128,6 +129,78 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
                 </Link>
               );
             })}
+
+            {/* ── RESELLER PROGRAM (desktop) ──
+                Hover/focus dropdown so the header gains the entry point without
+                adding three inline items. Same two real destinations as the
+                mobile drawer — no second implementation. */}
+            <div
+              className="relative"
+              onMouseEnter={() => setResellerDesktopOpen(true)}
+              onMouseLeave={() => setResellerDesktopOpen(false)}
+            >
+              <Link
+                href="/reseller"
+                aria-haspopup="true"
+                aria-expanded={resellerDesktopOpen}
+                onFocus={() => setResellerDesktopOpen(true)}
+                className={`relative inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-bold tracking-[0.07em] uppercase rounded-full transition-colors duration-200 ${
+                  pathname.startsWith("/reseller") || pathname.startsWith("/mkpanelzoneagents")
+                    ? "text-foreground"
+                    : "text-brand-ink-3 hover:text-foreground"
+                }`}
+              >
+                <span className="relative z-10">Reseller Program</span>
+                <ChevronDown
+                  size={13}
+                  className="relative z-10 transition-transform duration-200"
+                  style={{ transform: resellerDesktopOpen ? "rotate(180deg)" : "none" }}
+                />
+                {(pathname.startsWith("/reseller") || pathname.startsWith("/mkpanelzoneagents")) && (
+                  <motion.span
+                    layoutId="nav-active"
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full bg-brand-blue-500"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  />
+                )}
+              </Link>
+
+              <AnimatePresence>
+                {resellerDesktopOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] w-56 p-1.5 rounded-2xl z-50"
+                    style={{
+                      background: "var(--surface-glass)",
+                      backdropFilter: "blur(18px) saturate(160%)",
+                      WebkitBackdropFilter: "blur(18px) saturate(160%)",
+                      border: "1px solid var(--border-subtle)",
+                      boxShadow: "var(--shadow-glass)",
+                    }}
+                  >
+                    <Link
+                      href="/reseller"
+                      className="flex items-center gap-2.5 h-[42px] px-3 rounded-xl text-[12px] font-bold tracking-[0.05em] uppercase text-brand-ink-2 hover:text-white transition-colors"
+                      style={{ background: "rgba(239,68,68,0.10)" }}
+                    >
+                      <UserPlus size={15} className="text-red-400 shrink-0" />
+                      Join Reseller Program
+                    </Link>
+                    <Link
+                      href="/mkpanelzoneagents"
+                      className="flex items-center gap-2.5 h-[42px] px-3 rounded-xl text-[12px] font-bold tracking-[0.05em] uppercase text-brand-ink-2 hover:text-white transition-colors mt-1"
+                      style={{ background: "rgba(255,255,255,0.04)" }}
+                    >
+                      <LogIn size={15} className="text-brand-blue-400 shrink-0" />
+                      Reseller Login
+                    </Link>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* ── RIGHT ACTIONS ── */}
