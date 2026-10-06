@@ -175,27 +175,34 @@ export async function getStoredHeroCtas(): Promise<HeroCta[]> {
 export async function getHeroCtas(): Promise<HeroCta[]> {
   const stored = await getStoredHeroCtas();
   const usable = stored.filter((c) => c.enabled && /^https?:\/\//i.test(c.url));
-  if (usable.length > 0) return usable;
 
-  const links = await getSocialLinks();
-  const fromFooter: HeroCta[] = links
-    .filter((l) => SOCIAL_META[l.platform])
-    .map((l) => ({ platform: l.platform, label: "", url: l.url, enabled: true }));
+  let entries: HeroCta[];
 
-  if (fromFooter.some((l) => l.platform === "whatsapp")) {
-    return sortHeroOrder(fromFooter);
+  if (usable.length > 0) {
+    entries = usable;
+  } else {
+    const links = await getSocialLinks();
+    entries = links
+      .filter((l) => SOCIAL_META[l.platform])
+      .map((l) => ({ platform: l.platform, label: "", url: l.url, enabled: true }));
   }
 
-  try {
-    const { getWhatsAppNumber, whatsappLink } = await import("./settings");
-    const number = await getWhatsAppNumber();
-    const url = whatsappLink(number, "MK Panel Zone — official WhatsApp channel");
-    if (url) fromFooter.unshift({ platform: "whatsapp", label: "", url, enabled: true });
-  } catch {
-    /* nothing configured at all — the hero falls back to the static badge */
+  /* WhatsApp fallback. The primary WhatsApp support number is used ONLY when no
+     explicit WhatsApp hero URL exists — so a hero configured with just TikTok
+     and Discord still shows WhatsApp, and the Owner never has to duplicate the
+     support number into the hero settings. */
+  if (!entries.some((e) => e.platform === "whatsapp")) {
+    try {
+      const { getWhatsAppNumber, whatsappLink } = await import("./settings");
+      const number = await getWhatsAppNumber();
+      const url = whatsappLink(number, "MK Panel Zone — official WhatsApp channel");
+      if (url) entries = [{ platform: "whatsapp", label: "", url, enabled: true }, ...entries];
+    } catch {
+      /* no WhatsApp configured at all — rotate whatever else exists */
+    }
   }
 
-  return sortHeroOrder(fromFooter);
+  return sortHeroOrder(entries);
 }
 
 function sortHeroOrder(links: HeroCta[]): HeroCta[] {

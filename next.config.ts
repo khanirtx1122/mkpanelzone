@@ -19,6 +19,29 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+
+  /**
+   * Bounded revalidation window for the public homepage.
+   *
+   * The homepage is ISR-cached (`revalidate = 60`), but Next's default
+   * `stale-while-revalidate` is effectively unbounded (~1 year). That meant a
+   * stale copy could keep being served long after the Owner changed something
+   * visible — e.g. the hero social CTA — making saved settings look like they
+   * had no effect. Admin saves still purge the entry immediately via
+   * revalidatePath("/"); this window is the safety net that guarantees the
+   * homepage self-heals within about a minute even if an invalidation is ever
+   * missed.
+   */
+  async headers() {
+    return [
+      {
+        source: "/",
+        headers: [
+          { key: "Cache-Control", value: "public, s-maxage=60, stale-while-revalidate=60" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -12,11 +12,15 @@ const PLATFORMS = [
   { key: "tiktok", label: "TikTok" },
   { key: "discord", label: "Discord" },
   { key: "instagram", label: "Instagram" },
+  // Additional platforms are supported but listed after the four hero states.
   { key: "facebook", label: "Facebook" },
   { key: "youtube", label: "YouTube" },
   { key: "telegram", label: "Telegram" },
   { key: "x", label: "X / Twitter" },
 ];
+
+/** The four states the hero rotation is specified around. */
+const PRIMARY_PLATFORMS = ["whatsapp", "tiktok", "discord", "instagram"];
 
 const SUGGESTED: Record<string, string> = {
   whatsapp: "WhatsApp Channel",
@@ -78,6 +82,21 @@ export function HeroCtaManager({ initial }: { initial: HeroCtaInput[] }) {
 
   const live = rows.filter((r) => r.enabled && /^https?:\/\//i.test(r.url));
 
+  /** Per-platform state, so the Owner can see exactly why a platform is absent
+      instead of guessing. */
+  const statusOf = (platform: string): "ACTIVE" | "MISSING URL" | "DISABLED" | "OFF" => {
+    const row = rows.find((r) => r.platform === platform);
+    if (!row) return "OFF";
+    if (!row.enabled) return "DISABLED";
+    return /^https?:\/\//i.test(row.url) ? "ACTIVE" : "MISSING URL";
+  };
+
+  const primaryStatus = PRIMARY_PLATFORMS.map((p) => ({
+    platform: p,
+    label: PLATFORMS.find((x) => x.key === p)?.label ?? p,
+    status: statusOf(p),
+  }));
+
   const handleSave = async () => {
     const result = await run(() => saveHeroCtas(rows));
     if (!result) return;
@@ -96,6 +115,45 @@ export function HeroCtaManager({ initial }: { initial: HeroCtaInput[] }) {
 
   return (
     <div className="space-y-5">
+      {/* STATUS SUMMARY — the Owner must never have to guess why a platform
+          is not appearing on the homepage. */}
+      <div className="p-5 rounded-xl border border-white/10 bg-black/30">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink-3 mb-3">
+          Rotation status
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {primaryStatus.map(({ platform, label, status }) => {
+            const tone =
+              status === "ACTIVE"
+                ? "border-green-500/30 bg-green-500/10 text-green-400"
+                : status === "MISSING URL"
+                  ? "border-red-500/35 bg-red-500/10 text-red-400"
+                  : "border-white/10 bg-white/[0.03] text-brand-ink-3";
+            return (
+              <div key={platform} className={`rounded-lg border px-3 py-2.5 ${tone}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SWATCH[platform] }} />
+                  <span className="text-[11px] font-bold text-white truncate">{label}</span>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest">{status}</span>
+              </div>
+            );
+          })}
+        </div>
+        {primaryStatus.some((s) => s.status === "MISSING URL") && (
+          <p className="mt-3 text-[11px] text-red-400 leading-relaxed flex items-start gap-1.5">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            A platform is enabled but has no valid link, so it is skipped on the homepage. Paste its
+            https:// URL in the row below and save to bring it into the rotation.
+          </p>
+        )}
+        {primaryStatus.every((s) => s.status === "DISABLED") && (
+          <p className="mt-3 text-[11px] text-amber-400 leading-relaxed">
+            Nothing is enabled — the hero will show its fallback badge instead of the rotation.
+          </p>
+        )}
+      </div>
+
       {/* Live preview — exactly the 34px chip the public hero renders */}
       <div className="p-5 rounded-xl border border-white/10 bg-black/30">
         <p className="text-[10px] font-bold uppercase tracking-widest text-brand-ink-3 mb-3">
