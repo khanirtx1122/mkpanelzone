@@ -202,7 +202,7 @@ export function FreePanelClaim({ config, initialClaim, onClose }: FreePanelClaim
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.98 }}
           transition={{ duration: 0.32, ease: EASE }}
-          className="relative w-full max-w-[560px] max-h-[92dvh] overflow-y-auto rounded-[22px] border outline-none"
+          className="relative w-full max-w-[560px] max-h-[92vh] supports-[max-height:92dvh]:max-h-[92dvh] overflow-y-auto rounded-[22px] border outline-none"
           style={{
             background: "var(--surface)",
             borderColor: "var(--border-subtle)",

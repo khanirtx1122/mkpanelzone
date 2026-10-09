@@ -34,6 +34,8 @@ model Customer {
   branch            PlatformBranch?  @relation(fields: [branchId], references: [id])
   devices           CustomerDevice[]
   orders            Order[]
+  /// One customer identity → MANY independent access assignments.
+  entitlements      CustomerEntitlement[]
 
   // Hot admin list paths: platform filter + newest-first ordering.
   @@index([platformType, createdAt(sort: Desc)])
@@ -90,6 +92,7 @@ model PlatformBranch {
   resources PackageResource[]
   packages  Package[]
   products  Product[]
+  entitlements CustomerEntitlement[]
 
   @@unique([platformType, slug])
   // Branch lookup is always "this platform, ordered by sortOrder".
@@ -128,6 +131,7 @@ model Package {
   customers          Customer[]
   resources          PackageResource[]
   branch             PlatformBranch?   @relation(fields: [branchId], references: [id])
+  entitlements       CustomerEntitlement[]
 
   @@index([platformType, isDefaultForAgents])
   @@index([branchId])
@@ -400,4 +404,52 @@ model FreePanelKey {
 
   @@index([status])
   @@index([claimId])
+}
+
+/// ---------------------------------------------------------------------------
+/// CUSTOMER ENTITLEMENT — one independent access assignment.
+/// ---------------------------------------------------------------------------
+/// A customer identity (one User ID + one password) can hold MANY of these:
+/// different platforms, different branches, different packages, each with its
+/// OWN paid/unpaid state and its OWN expiry. Adding an access therefore never
+/// requires creating a second customer account.
+///
+/// The legacy Customer.platformType/branchId/packageId/paymentStatus/expiresAt
+/// columns remain populated as a controlled fallback during migration; the
+/// entitlement rows are the source of truth going forward.
+model CustomerEntitlement {
+  id               String   @id @default(uuid())
+  customerId       String
+  platformType     String
+  branchId         String?
+  packageId        String?
+  /// PAID | UNPAID — evaluated per access, never account-wide. A newly added
+  /// unpaid access must not lock the customer's other paid accesses.
+  paymentStatus    String   @default("UNPAID")
+  /// active | disabled — this access only. Account-wide suspension stays on
+  /// Customer.status so the two concepts cannot be confused.
+  status           String   @default("active")
+  startsAt         DateTime?
+  /// Null = permanent / no expiry for this access.
+  expiresAt        DateTime?
+  /// MIGRATED | OWNER | ORDER | AGENT
+  source           String   @default("MIGRATED")
+  /// The order that produced this access, when there was one.
+  orderId          String?
+  createdByAgentId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branch   PlatformBranch? @relation(fields: [branchId], references: [id])
+  package  Package?        @relation(fields: [packageId], references: [id])
+
+  // Login resolves by (customer, platform); admin lists by customer; the paid
+  // and expiry sweeps filter on those columns.
+  @@index([customerId, platformType])
+  @@index([customerId, status])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([paymentStatus, expiresAt])
+  @@index([branchId])
+  @@index([packageId])
 }

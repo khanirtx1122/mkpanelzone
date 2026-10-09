@@ -48,26 +48,57 @@ export type AccessState =
   | { kind: "BLOCKED_STATUS"; customer: SessionCustomer }
   | { kind: "BLOCKED_BRANCH"; customer: SessionCustomer }
   | { kind: "BLOCKED_PAYMENT"; customer: SessionCustomer }
+  | { kind: "BLOCKED_EXPIRED"; customer: SessionCustomer }
   | { kind: "GRANTED"; customer: SessionCustomer };
 
 /**
  * The single decision point for protected customer content.
  *
- * Order matters: a disabled account is treated as anonymous, a disabled branch
- * denies the section, and only then is payment evaluated — so a UI bug can
- * never accidentally downgrade a hard block into a soft one.
+ * MULTI-ACCESS: a customer identity can own several independent accesses, so
+ * the decision is made against the ENTITLEMENT this session is operating under
+ * (resolved from the session cookie), not against one account-wide flag:
+ *
+ *   - Customer.status stays ACCOUNT-WIDE (administrative suspension).
+ *   - paymentStatus / expiresAt / branch are evaluated PER ENTITLEMENT, so an
+ *     unpaid or expired access only locks that access — the customer's other
+ *     paid accesses keep working.
+ *
+ * Legacy accounts with no entitlement rows fall back to the customer's own
+ * fields, so nothing regresses for existing users.
+ *
+ * FAIL CLOSED: anything unexpected denies rather than grants.
  */
 export const getPaidAccess = cache(async (): Promise<AccessState> => {
   const customer = await getSessionCustomer();
   if (!customer) return { kind: "ANONYMOUS" };
 
+  // Account-wide suspension applies to every access.
   if (customer.status !== "active") return { kind: "BLOCKED_STATUS", customer };
 
-  if (customer.branchId && (!customer.branch || !customer.branch.isEnabled)) {
-    return { kind: "BLOCKED_BRANCH", customer };
+  let entitlement;
+  try {
+    const { getSessionEntitlement } = await import("@/lib/entitlements");
+    entitlement = await getSessionEntitlement(customer);
+  } catch (error) {
+    console.error("[getPaidAccess] entitlement resolution failed:", error);
+    // Fail closed — never grant because resolution broke.
+    return { kind: "BLOCKED_PAYMENT", customer };
   }
 
-  if (normalizePaymentStatus(customer.paymentStatus) !== PAYMENT_PAID) {
+  // The branch this access belongs to must exist and be enabled.
+  const branchId = entitlement.branchId ?? customer.branchId;
+  if (branchId) {
+    const branch = await prisma.platformBranch.findUnique({ where: { id: branchId } });
+    if (!branch || !branch.isEnabled) return { kind: "BLOCKED_BRANCH", customer };
+  }
+
+  // Per-access expiry.
+  if (entitlement.expiresAt && new Date(entitlement.expiresAt).getTime() <= Date.now()) {
+    return { kind: "BLOCKED_EXPIRED", customer };
+  }
+
+  // Per-access payment state.
+  if (normalizePaymentStatus(entitlement.paymentStatus) !== PAYMENT_PAID) {
     return { kind: "BLOCKED_PAYMENT", customer };
   }
 

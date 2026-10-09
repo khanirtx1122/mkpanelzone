@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronLeft, Calendar, ShieldCheck, ShieldAlert, Key, PackageOpen, CreditCard, Tag } from "lucide-react";
 import { CustomerActions } from "./CustomerActions";
 import { CustomerValidity } from "./CustomerValidity";
+import { AssignedAccess } from "./AssignedAccess";
 import { listAllPlatforms } from "@/lib/platforms";
 import { PlatformBadgeIcon } from "../../resources/PlatformBadgeIcon";
 import { resolveProofWithExistence } from "@/lib/paymentProof";
@@ -13,7 +14,7 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
   const params = await props.params;
 
   /* Customer, package catalogue and platform list load in one round-trip. */
-  const [customer, packages, platforms] = await Promise.all([
+  const [customer, packages, platforms, entitlements, branches] = await Promise.all([
     prisma.customer.findUnique({
       where: { id: params.id },
       include: {
@@ -26,6 +27,27 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
       orderBy: { name: "asc" }
     }),
     listAllPlatforms(),
+    /* All access assignments for this identity — the multi-access model. */
+    prisma.customerEntitlement.findMany({
+      where: { customerId: params.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        platformType: true,
+        branchId: true,
+        packageId: true,
+        paymentStatus: true,
+        status: true,
+        expiresAt: true,
+        branch: { select: { name: true } },
+        package: { select: { name: true } },
+      },
+    }),
+    prisma.platformBranch.findMany({
+      where: { isEnabled: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { id: true, platformType: true, name: true },
+    }),
   ]);
 
   if (!customer) {
@@ -178,6 +200,26 @@ export default async function CustomerDetailsPage(props: { params: Promise<{ id:
           />
         </div>
       </div>
+
+      {/* MULTI-ACCESS: every product/platform/branch this one identity owns,
+          each with its own paid state and expiry. */}
+      <AssignedAccess
+        customerId={customer.id}
+        entitlements={entitlements.map((e) => ({
+          id: e.id,
+          platformType: e.platformType,
+          branchId: e.branchId,
+          branchName: e.branch?.name ?? null,
+          packageId: e.packageId,
+          packageName: e.package?.name ?? null,
+          paymentStatus: e.paymentStatus,
+          status: e.status,
+          expiresAt: e.expiresAt ? e.expiresAt.toISOString() : null,
+        }))}
+        platforms={platforms.map((p) => ({ code: p.code, name: p.name }))}
+        branches={branches}
+        packages={packages.map((p) => ({ id: p.id, name: p.name, platformType: p.platformType }))}
+      />
     </div>
   );
 }

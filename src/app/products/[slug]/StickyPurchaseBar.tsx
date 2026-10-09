@@ -7,7 +7,16 @@ import { ArrowRight } from "lucide-react";
 export function StickyPurchaseBar({ price, slug, name }: { price: number, slug: string, name: string }) {
   const [isVisible, setIsVisible] = useState(false);
 
+  /* Older WebKit builds have no IntersectionObserver. Without this guard the
+     constructor would throw and take the whole purchase bar down on exactly the
+     devices that need it most. Support is read once during render, and the bar
+     simply stays visible where the observer is unavailable — no state update
+     inside the effect. */
+  const supportsObserver = typeof IntersectionObserver !== "undefined";
+
   useEffect(() => {
+    if (!supportsObserver) return;
+
     const mainCta = document.getElementById("main-cta");
     if (!mainCta) return;
 
@@ -20,9 +29,9 @@ export function StickyPurchaseBar({ price, slug, name }: { price: number, slug: 
 
     observer.observe(mainCta);
     return () => observer.disconnect();
-  }, []);
+  }, [supportsObserver]);
 
-  if (!isVisible) return null;
+  if (!isVisible && supportsObserver) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-4 sm:pb-6 pt-4 bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none">

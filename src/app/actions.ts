@@ -355,40 +355,78 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
     }
     clearLoginAttempts(ip);
 
-    if (customer.platformType !== parsed.data.platform) {
+    /* ── MULTI-ACCESS RESOLUTION ─────────────────────────────────────────
+       The customer may hold SEVERAL independent accesses (different platforms,
+       branches, packages). Resolve which one this sign-in is for from the
+       platform + branch the customer chose, rather than assuming the account
+       has a single platform.
+
+       Legacy fallback: if the customer has no entitlement rows yet, or the
+       legacy platform matches, fall back to the customer's own fields so an
+       existing account can still sign in. */
+    let requestedBranchId: string | null = null;
+    if (parsed.data.branchSlug) {
+      const resolved = await resolveBranch(parsed.data.platform, parsed.data.branchSlug);
+      if (resolved.ok) requestedBranchId = resolved.branch.id;
+    }
+
+    const { findEntitlementForContext } = await import("@/lib/entitlements");
+    let entitlement = await findEntitlementForContext(
+      customer.id,
+      parsed.data.platform,
+      requestedBranchId,
+    );
+
+    if (!entitlement && customer.platformType === parsed.data.platform) {
+      entitlement = {
+        id: "",
+        customerId: customer.id,
+        platformType: customer.platformType,
+        branchId: customer.branchId,
+        packageId: customer.packageId,
+        paymentStatus: customer.paymentStatus,
+        status: "active",
+        startsAt: null,
+        expiresAt: customer.expiresAt,
+        source: "LEGACY",
+      };
+    }
+
+    // No access for the requested platform/branch → neutral denial that does
+    // not reveal which platforms the account does own.
+    if (!entitlement) {
       return { type: "WRONG_PLATFORM" };
     }
 
+    // Account-wide suspension.
     if (customer.status !== "active") {
       return { type: "INVALID_CREDENTIALS" };
     }
 
+    // This access was disabled individually.
+    if (entitlement.status !== "active") {
+      return { type: "INVALID_CREDENTIALS" };
+    }
+
     /* ── Branch authorization (server-side, never trusted from the client) ──
-       The submitted branch slug is only a routing hint; the customer record
-       is the source of truth. If the customer belongs to a branch and it is
-       not the branch they selected (or that branch is disabled), deny with a
-       neutral message that does not reveal which branch the account is in. */
-    if (customer.branchId) {
+       The submitted branch slug is only a routing hint; the ENTITLEMENT is the
+       source of truth for which branch this access belongs to. A disabled
+       branch denies with a neutral message. */
+    if (entitlement.branchId) {
       const branch = await prisma.platformBranch.findUnique({
-        where: { id: customer.branchId },
+        where: { id: entitlement.branchId },
       });
-      const submitted = parsed.data.branchSlug
-        ? await prisma.platformBranch.findUnique({
-            where: { platformType_slug: { platformType: customer.platformType, slug: parsed.data.branchSlug } },
-          })
-        : null;
-      if (!branch || !branch.isEnabled || (submitted && submitted.id !== branch.id)) {
+      if (!branch || !branch.isEnabled) {
         return { type: "BRANCH_DENIED" };
       }
-    } else {
-      // Legacy/pre-branch customer: attach to their platform's first enabled
-      // branch so split platforms keep working without owner intervention.
-      const branchId = await ensureCustomerBranch(customer);
-      if (branchId && parsed.data.branchSlug) {
-        const resolved = await resolveBranch(customer.platformType, parsed.data.branchSlug);
-        if (!resolved.ok || resolved.branch.id !== branchId) {
-          return { type: "BRANCH_DENIED" };
-        }
+      if (requestedBranchId && requestedBranchId !== entitlement.branchId) {
+        return { type: "BRANCH_DENIED" };
+      }
+    } else if (requestedBranchId) {
+      // Platform-wide access: the requested branch must exist and be enabled.
+      const branch = await prisma.platformBranch.findUnique({ where: { id: requestedBranchId } });
+      if (!branch || !branch.isEnabled) {
+        return { type: "BRANCH_DENIED" };
       }
     }
 
@@ -439,6 +477,23 @@ export async function customerLogin(prevState: any, formData: FormData): Promise
       maxAge: 60 * 60 * 24 * 30,
     });
 
+    /* Which of the customer's accesses this session is operating under. The
+       dashboard resolves resources and the paid gate from THIS entitlement, so
+       one unpaid access can never lock the customer's other paid accesses. */
+    const { ENTITLEMENT_COOKIE } = await import("@/lib/entitlements");
+    if (entitlement.id) {
+      cookieStore.set(ENTITLEMENT_COOKIE, entitlement.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+    } else {
+      // Legacy fallback path — no entitlement row to scope the session to.
+      cookieStore.delete(ENTITLEMENT_COOKIE);
+    }
+
     /* Non-sensitive companion hint (contains no identity). It lets the navbar
        and the announcement/popup layers know the audience in the browser, which
        keeps the public site statically renderable. */
@@ -468,6 +523,9 @@ export async function customerLogout() {
   const cookieStore = await cookies();
   cookieStore.delete("auth_session");
   cookieStore.delete("mk_session");
+  // The session's access scope must not survive the session itself.
+  const { ENTITLEMENT_COOKIE } = await import("@/lib/entitlements");
+  cookieStore.delete(ENTITLEMENT_COOKIE);
   redirect("/");
 }
 

@@ -32,6 +32,30 @@ export default async function DashboardPage() {
     );
   }
 
+  /* This ACCESS has expired. Other accesses the customer owns are unaffected —
+     the gate is evaluated per entitlement. */
+  if (access.kind === "BLOCKED_EXPIRED") {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center px-6 py-32">
+        <GlassCard className="border-amber-500/40 p-8 text-center max-w-md w-full">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 mx-auto flex items-center justify-center text-amber-400 mb-6">
+            <ShieldAlert size={32} />
+          </div>
+          <h2 className="text-2xl font-extrabold text-foreground mb-2 uppercase tracking-wide">
+            Access Expired
+          </h2>
+          <p className="text-brand-ink-3 text-sm mb-8">
+            This access has reached its expiry date. Contact support to renew it —
+            any other access on your account is unaffected.
+          </p>
+          <Button variant="primary" asChild className="w-full">
+            <Link href="/">Back to Home</Link>
+          </Button>
+        </GlassCard>
+      </div>
+    );
+  }
+
   if (access.kind === "BLOCKED_STATUS" || access.kind === "BLOCKED_BRANCH") {
     return (
       <div className="min-h-screen flex flex-col justify-center items-center px-6 py-32">
@@ -55,30 +79,48 @@ export default async function DashboardPage() {
 
   const customer = access.customer;
 
+  /* MULTI-ACCESS: resolve resources for the SPECIFIC access this session is
+     operating under, not for every access the customer owns. Using the
+     entitlement's platform/branch/package prevents resources leaking across a
+     customer's other accesses. Falls back to the customer's own fields for
+     legacy accounts. */
+  const { getSessionEntitlement } = await import("@/lib/entitlements");
+  const entitlement = await getSessionEntitlement(customer);
+  const ctxPlatform = entitlement.platformType || customer.platformType;
+  const ctxBranchId = entitlement.branchId ?? customer.branchId;
+  const ctxPackageId = entitlement.packageId ?? customer.packageId;
+
   /* Platform-wide resources stay shared; branch resources are only visible
      inside their own enabled branch. Both queries run in parallel. */
-  const [branchResources, globalResources, platformRecord] = await Promise.all([
-    customer.branchId
+  const [branchResources, globalResources, packageResources, platformRecord] = await Promise.all([
+    ctxBranchId
       ? prisma.packageResource.findMany({
-          where: { branchId: customer.branchId, status: "active" },
+          where: { branchId: ctxBranchId, status: "active" },
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         })
       : Promise.resolve([]),
     prisma.packageResource.findMany({
       where: {
-        platformType: customer.platformType,
+        platformType: ctxPlatform,
         packageId: null,
         status: "active",
-        OR: [{ branchId: null }, ...(customer.branchId ? [{ branchId: customer.branchId }] : [])],
+        OR: [{ branchId: null }, ...(ctxBranchId ? [{ branchId: ctxBranchId }] : [])],
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
-    findPlatformByCode(customer.platformType),
+    /* Resources attached to THIS access's package. */
+    ctxPackageId
+      ? prisma.packageResource.findMany({
+          where: { packageId: ctxPackageId, status: "active" },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        })
+      : Promise.resolve([]),
+    findPlatformByCode(ctxPlatform),
   ]);
 
   /* De-duplicate by id while preserving the manual display order. */
   const seen = new Set<string>();
-  const allResources = [...branchResources, ...globalResources].filter((r) => {
+  const allResources = [...branchResources, ...packageResources, ...globalResources].filter((r) => {
     if (seen.has(r.id)) return false;
     seen.add(r.id);
     return true;
@@ -88,7 +130,7 @@ export default async function DashboardPage() {
     <DashboardClient
       identifier={customer.identifier}
       resources={allResources}
-      platformType={customer.platformType}
+      platformType={ctxPlatform}
       platformName={platformRecord?.name}
       branchName={customer.branch?.name || null}
       warning={

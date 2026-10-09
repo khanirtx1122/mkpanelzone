@@ -1149,3 +1149,181 @@ export async function saveHeroCtas(ctas: HeroCtaInput[]): Promise<{ success: boo
     return { success: false, error: "Failed to save hero CTAs." };
   }
 }
+
+// ----------------------------------------------------------------------
+// CUSTOMER ENTITLEMENTS (multi-access)
+// ----------------------------------------------------------------------
+
+/**
+ * ATTACH A NEW ACCESS to an EXISTING customer.
+ *
+ * This is the whole point of the entitlement model: a customer who buys a
+ * second product gets another access row on the SAME identity — never a second
+ * customer account. The legacy Customer columns are also refreshed to the
+ * newest access so older code paths keep behaving sensibly.
+ */
+export async function adminAddEntitlement(formData: FormData): Promise<{ success?: boolean; error?: string }> {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const customerId = String(formData.get("customerId") || "");
+  const platformType = String(formData.get("platformType") || "").toUpperCase();
+  const branchId = String(formData.get("branchId") || "") || null;
+  const packageId = String(formData.get("packageId") || "") || null;
+  const paymentStatus = String(formData.get("paymentStatus") || "UNPAID") === "PAID" ? "PAID" : "UNPAID";
+  const expiresRaw = String(formData.get("expiresAt") || "").trim();
+
+  if (!customerId || !platformType) {
+    return { error: "Platform is required." };
+  }
+
+  const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+  if (!customer) return { error: "Customer not found." };
+
+  /* Server-side validation: the platform must exist and be enabled, and the
+     branch (if given) must belong to that platform. A tampered form can never
+     attach an access to a mismatched branch. */
+  const { findPlatformByCode } = await import("@/lib/platforms");
+  const platform = await findPlatformByCode(platformType);
+  if (!platform || !platform.isEnabled) return { error: "That platform is not available." };
+
+  let validBranchId: string | null = null;
+  if (branchId) {
+    const branch = await prisma.platformBranch.findUnique({
+      where: { id: branchId },
+      select: { id: true, platformType: true, isEnabled: true },
+    });
+    if (!branch || branch.platformType !== platformType || !branch.isEnabled) {
+      return { error: "That branch does not belong to the selected platform." };
+    }
+    validBranchId = branch.id;
+  }
+
+  const expiresAt = expiresRaw ? new Date(expiresRaw) : null;
+  if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+    return { error: "Invalid expiry date." };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      /* Extend rather than duplicate: if this exact access already exists, the
+         new values update it instead of silently creating a second row. */
+      const existing = await tx.customerEntitlement.findFirst({
+        where: { customerId, platformType, branchId: validBranchId, packageId },
+        select: { id: true },
+      });
+
+      if (existing) {
+        await tx.customerEntitlement.update({
+          where: { id: existing.id },
+          data: { paymentStatus, expiresAt, status: "active" },
+        });
+      } else {
+        await tx.customerEntitlement.create({
+          data: {
+            customerId,
+            platformType,
+            branchId: validBranchId,
+            packageId,
+            paymentStatus,
+            status: "active",
+            startsAt: new Date(),
+            expiresAt,
+            source: "OWNER",
+          },
+        });
+      }
+
+      /* Keep the legacy columns pointing at the most recent access so any code
+         path that still reads them stays coherent. */
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { platformType, branchId: validBranchId, packageId, paymentStatus, expiresAt },
+      });
+    });
+
+    revalidateTag(ADMIN_TAGS.customers, "max");
+    revalidatePath(`/mkpanelzoneadmin/customers/${customerId}`);
+    revalidatePath("/mkpanelzoneadmin/customers");
+    return { success: true };
+  } catch (error) {
+    console.error("[adminAddEntitlement]", error);
+    return { error: "Failed to add access." };
+  }
+}
+
+/** Update one access: paid state, expiry, package, active/disabled. */
+export async function adminUpdateEntitlement(formData: FormData): Promise<{ success?: boolean; error?: string }> {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const entitlementId = String(formData.get("entitlementId") || "");
+  if (!entitlementId) return { error: "Missing access id." };
+
+  const row = await prisma.customerEntitlement.findUnique({
+    where: { id: entitlementId },
+    select: { id: true, customerId: true },
+  });
+  if (!row) return { error: "Access not found." };
+
+  const data: Record<string, unknown> = {};
+
+  if (formData.has("paymentStatus")) {
+    data.paymentStatus = String(formData.get("paymentStatus")) === "PAID" ? "PAID" : "UNPAID";
+  }
+  if (formData.has("status")) {
+    data.status = String(formData.get("status")) === "active" ? "active" : "disabled";
+  }
+  if (formData.has("packageId")) {
+    data.packageId = String(formData.get("packageId") || "") || null;
+  }
+  if (formData.has("expiresAt")) {
+    const raw = String(formData.get("expiresAt") || "").trim();
+    const parsed = raw ? new Date(raw) : null;
+    if (parsed && Number.isNaN(parsed.getTime())) return { error: "Invalid expiry date." };
+    data.expiresAt = parsed;
+  }
+
+  if (Object.keys(data).length === 0) return { error: "Nothing to update." };
+
+  try {
+    await prisma.customerEntitlement.update({ where: { id: entitlementId }, data });
+    revalidateTag(ADMIN_TAGS.customers, "max");
+    revalidatePath(`/mkpanelzoneadmin/customers/${row.customerId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("[adminUpdateEntitlement]", error);
+    return { error: "Failed to update access." };
+  }
+}
+
+/**
+ * REMOVE ONE ACCESS.
+ *
+ * Deliberately separate from deleting a customer: only this entitlement is
+ * removed. The customer identity and every other access remain untouched.
+ */
+export async function adminRemoveEntitlement(formData: FormData): Promise<{ success?: boolean; error?: string }> {
+  const owner = await ensureOwner();
+  if (!owner) return { error: "Unauthorized" };
+
+  const entitlementId = String(formData.get("entitlementId") || "");
+  if (!entitlementId) return { error: "Missing access id." };
+
+  const row = await prisma.customerEntitlement.findUnique({
+    where: { id: entitlementId },
+    select: { id: true, customerId: true },
+  });
+  if (!row) return { error: "Access not found." };
+
+  try {
+    await prisma.customerEntitlement.delete({ where: { id: entitlementId } });
+    revalidateTag(ADMIN_TAGS.customers, "max");
+    revalidatePath(`/mkpanelzoneadmin/customers/${row.customerId}`);
+    revalidatePath("/mkpanelzoneadmin/customers");
+    return { success: true };
+  } catch (error) {
+    console.error("[adminRemoveEntitlement]", error);
+    return { error: "Failed to remove access." };
+  }
+}
