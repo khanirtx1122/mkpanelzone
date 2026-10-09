@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 import type { PlatformBranch } from "@prisma/client";
+
+/** Cache tag for branch configuration — invalidated when the Owner edits branches. */
+export const BRANCHES_CACHE_TAG = "branches-config";
 
 /**
  * Generic platform branch architecture.
@@ -48,8 +52,30 @@ export async function listEnabledBranches(platformType: string) {
  *   to AIM PLUS HOLO exactly once (guarded by a SiteSetting flag).
  * - Never touches passwords, packages, status or device bindings.
  */
+/**
+ * One-time Android branch provisioning.
+ *
+ * PERFORMANCE — this runs on the /access critical path, so the migration flag
+ * is checked FIRST. Previously the flag was read *after* two upserts, meaning
+ * every single page load paid two write round-trips (~356ms each against the
+ * remote database) to re-confirm branches that already existed. The flag now
+ * short-circuits the whole function, and the resulting branch row is cached.
+ */
 export async function ensureDefaultBranches() {
   const FLAG = "android_branch_migration_v1";
+
+  // Fast path: the migration has already run. One indexed read, then cached.
+  try {
+    const done = await prisma.siteSetting.findUnique({ where: { key: FLAG } });
+    if (done) {
+      const cached = await readAimBranch();
+      // If the cached row is missing (e.g. it was deleted), fall through and
+      // re-provision rather than returning null.
+      if (cached) return cached;
+    }
+  } catch {
+    // A settings hiccup must not block the Access screen.
+  }
 
   const aim = await prisma.platformBranch.upsert({
     where: { platformType_slug: { platformType: "ANDROID", slug: "aim-plus-holo" } },
@@ -79,9 +105,6 @@ export async function ensureDefaultBranches() {
     },
   });
 
-  const done = await prisma.siteSetting.findUnique({ where: { key: FLAG } });
-  if (done) return aim;
-
   // One-time backfill — run inside a transaction so it is all-or-nothing.
   await prisma.$transaction(async (tx) => {
     const r1 = await tx.customer.updateMany({
@@ -99,6 +122,16 @@ export async function ensureDefaultBranches() {
 
   return aim;
 }
+
+/** Cross-request cached AIM Plus Holo branch row (stable configuration). */
+const readAimBranch = unstable_cache(
+  async () =>
+    prisma.platformBranch.findUnique({
+      where: { platformType_slug: { platformType: "ANDROID", slug: "aim-plus-holo" } },
+    }),
+  ["aim-branch"],
+  { revalidate: 600, tags: [BRANCHES_CACHE_TAG] },
+);
 
 /**
  * Guarantees that a platform which is in use has at least one enabled branch.

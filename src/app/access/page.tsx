@@ -1,9 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccessForm } from "./AccessForm";
-import { ensureDefaultBranches } from "@/lib/branches";
-import { listActivePlatforms } from "@/lib/platforms";
-import { prisma } from "@/lib/prisma";
+import { getAccessConfig } from "@/lib/accessConfig";
 import { getWhatsAppNumber, whatsappLink } from "@/lib/settings";
 import { MessageCircle } from "lucide-react";
 
@@ -19,51 +17,28 @@ export default async function AccessPage() {
     redirect("/dashboard");
   }
 
-  /* The Android branch split is a genuine Android-only structure, so it still
-     runs explicitly. Everything platform-generic now comes from the database. */
-  await ensureDefaultBranches();
+  /* ── CRITICAL PATH ────────────────────────────────────────────────────
+     Profiling this route against the live database showed ~2.7s of SEQUENTIAL
+     round-trips before any content could render (two branch upserts, a
+     settings read, the platform query, the branch query, another settings
+     read), which is what left the loading skeleton on screen.
 
-  const platforms = await listActivePlatforms();
+     Everything the first screen needs now runs CONCURRENTLY, and the stable
+     platform/branch configuration is served from a tagged cache. No
+     customer-specific data is fetched here — only public selector config. */
+  const [config, waNumber] = await Promise.all([
+    getAccessConfig(),
+    getWhatsAppNumber(),
+  ]);
 
-  /* Branches for every enabled platform in ONE grouped query rather than a
-     per-platform round-trip. The selection screen switches between platforms
-     client-side without any additional network work. */
-  const branches = await prisma.platformBranch.findMany({
-    where: {
-      platformType: { in: platforms.map((p) => p.code) },
-      isEnabled: true,
-    },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      platformType: true,
-      name: true,
-      slug: true,
-      description: true,
-    },
-  });
-
-  const branchesByPlatform: Record<string, typeof branches> = {};
-  for (const b of branches) {
-    (branchesByPlatform[b.platformType] ??= []).push(b);
-  }
-
-  /* Support hand-off — primary admin-configured WhatsApp number. */
-  const waNumber = await getWhatsAppNumber();
   const helpHref = whatsappLink(waNumber, "Hi MK Panel Zone, I am having a problem accessing my panel.");
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center px-6 py-32 relative">
       <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-10 pointer-events-none" />
       <AccessForm
-        platforms={platforms.map((p) => ({
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          description: p.description,
-          iconKey: p.iconKey,
-        }))}
-        branchesByPlatform={branchesByPlatform}
+        platforms={config.platforms}
+        branchesByPlatform={config.branchesByPlatform}
       />
 
       {/* Compact premium support entry — fits under the access card. */}

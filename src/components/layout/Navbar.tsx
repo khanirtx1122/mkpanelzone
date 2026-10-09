@@ -240,8 +240,12 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
               </button>
             )}
 
-            {/* Access button — icon always, label on ≥360px */}
+            {/* Access button — icon always, label on ≥360px.
+                Prefetched explicitly: this is the highest-probability
+                destination from the header, and the route previously left the
+                user on a skeleton while its data loaded. */}
             <Link
+              prefetch
               href={isLoggedIn ? "/dashboard" : "/access"}
               aria-label={isLoggedIn ? "My Panel" : "Customer Access"}
               className="relative h-[42px] flex items-center rounded-[12px] px-2 sm:px-3 border transition-[background-color,border-color,transform] duration-200 focus-visible:outline-2 focus-visible:outline-brand-neon-blue focus-visible:outline-offset-2 active:scale-[0.96]"
@@ -386,6 +390,7 @@ export function Navbar({ isLoggedIn: isLoggedInProp }: { isLoggedIn?: boolean })
                 transition={{ delay: 0.2, duration: 0.22, ease: [0.22,1,.36,1] }}
               >
                 <Link
+                  prefetch
                   href={isLoggedIn ? "/dashboard" : "/access"}
                   onClick={() => setIsOpen(false)}
                   className="h-[52px] flex items-center gap-3 px-4 rounded-[14px] font-extrabold tracking-[0.06em] uppercase text-white relative overflow-hidden text-[14px] active:scale-[0.975] transition-transform duration-100"

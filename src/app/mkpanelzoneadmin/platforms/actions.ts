@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath, updateTag } from "next/cache";
 import { requireOwner } from "@/lib/owner";
+import { ACCESS_CONFIG_TAG } from "@/lib/accessConfig";
+import { BRANCHES_CACHE_TAG } from "@/lib/branches";
 import {
   isValidPlatformCode,
   normalizePlatformCode,
@@ -19,6 +21,12 @@ function revalidatePlatformSurfaces() {
      so without this a new platform could stay invisible for up to 5 minutes.
      `updateTag` gives immediate read-your-own-writes semantics in an action. */
   updateTag("platforms");
+  /* The Customer Access screen serves its platform/branch config from a
+     separate tagged cache. revalidatePath does NOT clear unstable_cache
+     entries, so the tag must be invalidated explicitly or the public Access
+     page would keep showing the old platforms. */
+  updateTag(ACCESS_CONFIG_TAG);
+  updateTag(BRANCHES_CACHE_TAG);
   revalidatePath("/mkpanelzoneadmin/platforms");
   revalidatePath("/mkpanelzoneadmin/resources");
   revalidatePath("/mkpanelzoneadmin/customers");
